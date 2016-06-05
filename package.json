@@ -1,7 +1,7 @@
 {
-  "name": "ilp-plugin-virtual",
+  "name": "ilp-plugin-bells",
   "version": "0.0.0",
-  "description": "ILP virtual ledger plugin for directly transacting connectors",
+  "description": "ILP Ledger plugin for five-bells-ledger",
   "main": "index.js",
   "scripts": {
     "lint": "eslint .",
@@ -9,14 +9,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/interledger/ilp-plugin-virtual.git"
+    "url": "git+https://github.com/interledger/js-ilp-plugin-bells.git"
   },
   "keywords": [
-    "virtual",
-    "trustline",
-    "ripple",
-    "ledgerless",
-    "trust",
+    "five-bells",
+    "default",
     "connector",
     "ilp",
     "interledger",
@@ -26,9 +23,9 @@
   "author": "Interledger Team <info@interledger.org>",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/interledger/ilp-plugin-virtual/issues"
+    "url": "https://github.com/interledger/js-ilp-plugin-bells/issues"
   },
-  "homepage": "https://github.com/interledger/ilp-plugin-virtual#readme",
+  "homepage": "https://github.com/interledger/js-ilp-plugin-bells#readme",
   "devDependencies": {
     "chai": "^3.5.0",
     "cz-conventional-changelog": "^1.1.6",
@@ -48,5 +45,14 @@
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"
     }
+  },
+  "dependencies": {
+    "co": "^4.6.0",
+    "co-request": "^1.0.0",
+    "eventemitter2": "^1.0.3",
+    "five-bells-shared": "^16.1.0",
+    "mag": "^0.9.1",
+    "reconnect-core": "^1.2.0",
+    "ws": "^1.1.0"
   }
 }

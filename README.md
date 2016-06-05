@@ -1,15 +1,24 @@
-# ilp-plugin-virtual
+# ilp-plugin-bells
 
-> ILP virtual ledger plugin for directly transacting connectors
+> ILP ledger plugin for [five-bells-ledger](https://github.com/interledger/five-bells-ledger)
 
 ## Installation
 
 ``` sh
-npm install --save ilp-plugin-virtual
+npm install --save ilp ilp-plugin-bells
 ```
 
 ## Usage
 
 ``` js
-// TODO
+const Client = require('ilp').Client
+
+const client = new Client({
+  type: 'bells',
+  auth: {
+    // Account URI
+    account: 'https://red.ilpdemo.org/ledger/accounts/alice',
+    password: 'alice'
+  }
+})
 ```
