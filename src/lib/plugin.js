@@ -41,9 +41,13 @@ class FiveBellsLedger extends EventEmitter2 {
   constructor (options) {
     super()
 
-    this.id = null
+    this.id = options.id || null
     this.credentials = options.auth
     this.config = options.config
+    this.log = options.log || log
+
+    this.debugReplyNotifications = options.debugReplyNotifications || false
+    this.debugAutofund = options.debugAutofund || null
 
     this.connection = null
     this.connected = false
@@ -57,11 +61,11 @@ class FiveBellsLedger extends EventEmitter2 {
     const accountUri = this.credentials.account
 
     if (this.connection) {
-      log.warn('already connected, ignoring connection request')
+      this.log.warn('already connected, ignoring connection request')
       return Promise.resolve(null)
     }
 
-    log.info('connecting to account ' + accountUri)
+    this.log.info('connecting to account ' + accountUri)
 
     // Resolve ledger URI
     const res = yield request.get({
@@ -74,8 +78,13 @@ class FiveBellsLedger extends EventEmitter2 {
     this.id = res.body.ledger
     this.credentials.username = res.body.name
 
+    // Autofund debug feature
+    if (this.debugAutofund) {
+      yield this._autofund()
+    }
+
     const streamUri = accountUri.replace('http', 'ws') + '/transfers'
-    log.debug('subscribing to ' + streamUri)
+    this.log.debug('subscribing to ' + streamUri)
     const auth = this.credentials.password && this.credentials.username &&
                    this.credentials.username + ':' + this.credentials.password
     const options = {
@@ -94,24 +103,23 @@ class FiveBellsLedger extends EventEmitter2 {
     return new Promise((resolve, reject) => {
       this.connection = reconnect({immediate: true}, (ws) => {
         ws.on('open', () => {
-          log.info('ws connected to ' + streamUri)
+          this.log.info('ws connected to ' + streamUri)
         })
         ws.on('message', (msg) => {
           const notification = JSON.parse(msg)
-          log.debug('notify transfer', notification.resource.state, notification.resource.id)
+          this.log.debug('notify transfer', notification.resource.state, notification.resource.id)
 
           co.wrap(this._handleNotification)
             .call(this, notification.resource, notification.related_resources)
             .then(() => {
-              // TODO Re-enable this test feature
-              // if (this.config.features.debugReplyNotifications) {
-              //   ws.send(JSON.stringify({ result: 'processed' }))
-              // }
+              if (this.debugReplyNotifications) {
+                ws.send(JSON.stringify({ result: 'processed' }))
+              }
             })
             .catch((err) => {
-              log.warn('failure while processing notification: ' +
+              this.log.warn('failure while processing notification: ' +
                 (err && err.stack) ? err.stack : err)
-              if (this.config.features.debugReplyNotifications) {
+              if (this.debugReplyNotifications) {
                 ws.send(JSON.stringify({
                   result: 'ignored',
                   ignoreReason: {
@@ -123,7 +131,7 @@ class FiveBellsLedger extends EventEmitter2 {
             })
         })
         ws.on('close', () => {
-          log.info('ws disconnected from ' + streamUri)
+          this.log.info('ws disconnected from ' + streamUri)
         })
 
         // reconnect-core expects the disconnect method to be called: `end`
@@ -138,8 +146,8 @@ class FiveBellsLedger extends EventEmitter2 {
         this.connected = false
         this.emit('disconnect')
       })
-      .on('error', function (err) {
-        log.warn('ws error on ' + streamUri + ': ' + err)
+      .on('error', (err) => {
+        this.log.warn('ws error on ' + streamUri + ': ' + err)
         reject(err)
       })
       .connect()
@@ -162,7 +170,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getInfo () {
-    log.debug('getInfo', this.id)
+    this.log.debug('getInfo', this.id)
     function throwErr () {
       throw new ExternalError('Unable to determine ledger precision')
     }
@@ -172,7 +180,7 @@ class FiveBellsLedger extends EventEmitter2 {
       res = yield request(this.id, {json: true})
     } catch (e) {
       if (!res || res.statusCode !== 200) {
-        log.debug('getPrecisionAndScale', e)
+        this.log.debug('getInfo', e)
         throwErr()
       }
     }
@@ -246,14 +254,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _send (transfer) {
-    if (transfer.ledger !== this.id) {
-      throw new Error('Transfer was sent to the wrong plugin (expected: ' +
-        this.id + ', actual: ' + transfer.ledger + ')')
-    }
-
     const fiveBellsTransfer = {
       id: this.id + '/transfers/' + transfer.id,
-      ledger: transfer.ledger,
+      ledger: this.id,
       debits: [{
         account: this.credentials.account,
         amount: transfer.amount,
@@ -274,7 +277,7 @@ class FiveBellsLedger extends EventEmitter2 {
     // If Atomic mode, add destination transfer to notification targets
     if (transfer.cases) {
       for (let caseUri of transfer.cases) {
-        log.debug('Add case notification for ' + caseUri)
+        this.log.debug('Add case notification for ' + caseUri)
         const res = yield request({
           method: 'POST',
           uri: caseUri + '/targets',
@@ -288,7 +291,7 @@ class FiveBellsLedger extends EventEmitter2 {
       }
     }
 
-    log.debug('submitting transfer ' + fiveBellsTransfer.id)
+    this.log.debug('submitting transfer ' + fiveBellsTransfer.id)
     yield this._request({
       method: 'put',
       uri: fiveBellsTransfer.id,
@@ -316,7 +319,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (fulfillmentRes.statusCode === 200 || fulfillmentRes.statusCode === 201) {
       return 'executed'
     } else {
-      log.error('Failed to submit fulfillment for transfer: ' + transferID + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
+      this.log.error('Failed to submit fulfillment for transfer: ' + transferID + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
     }
   }
 
@@ -329,11 +332,6 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _handleNotification (fiveBellsTransfer, relatedResources) {
-    if (fiveBellsTransfer.ledger !== this.id) {
-      throw new Error('Transfer was received by the wrong plugin (plugin: ' +
-        this.id + ', transfer: ' + fiveBellsTransfer.ledger + ')')
-    }
-
     this._validateTransfer(fiveBellsTransfer)
 
     let handled = false
@@ -344,7 +342,6 @@ class FiveBellsLedger extends EventEmitter2 {
         const transfer = lodash.omitBy({
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'incoming',
-          ledger: this.id,
           // TODO: What if there are multiple debits?
           account: fiveBellsTransfer.debits[0].account,
           amount: credit.amount,
@@ -387,7 +384,6 @@ class FiveBellsLedger extends EventEmitter2 {
         const transfer = lodash.omitBy({
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'outgoing',
-          ledger: this.id,
           account: credit.account,
           amount: debit.amount,
           data: credit.memo,
@@ -441,8 +437,8 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _autofund () {
-    log.info('autofunded account at ' + this.id)
-    const admin = this.config.get('admin')
+    this.log.info('autofund account at ' + this.credentials.account)
+    const admin = this.debugAutofund.admin
     yield requestRetry({
       method: 'put',
       url: this.credentials.account,
@@ -450,7 +446,7 @@ class FiveBellsLedger extends EventEmitter2 {
       body: {
         name: this.credentials.username,
         balance: '1500000',
-        connector: this.config.getIn(['server', 'base_uri']),
+        connector: this.debugAutofund.connector,
         password: this.credentials.password,
         fingerprint: this.credentials.fingerprint
       }
