@@ -356,7 +356,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
         if (fiveBellsTransfer.state === 'prepared' ||
             (fiveBellsTransfer.state === 'executed' && !transfer.executionCondition)) {
-          yield this.emitAsync('incoming', transfer)
+          yield this.emitAsync('receive', transfer)
         }
 
         if (fiveBellsTransfer.state === 'executed' && relatedResources &&
