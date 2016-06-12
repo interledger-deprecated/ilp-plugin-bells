@@ -28,6 +28,7 @@
   "homepage": "https://github.com/interledger/js-ilp-plugin-bells#readme",
   "devDependencies": {
     "chai": "^3.5.0",
+    "co-mocha": "^1.1.2",
     "cz-conventional-changelog": "^1.1.6",
     "eslint": "^2.11.1",
     "eslint-config-standard": "^5.3.1",
@@ -36,6 +37,10 @@
     "ghooks": "^1.2.1",
     "istanbul": "^0.4.3",
     "mocha": "^2.5.3",
+    "mock-require": "^1.3.0",
+    "mock-socket": "^3.0.1",
+    "nock": "^8.0.0",
+    "sinon": "^1.17.4",
     "validate-commit-msg": "^2.6.1"
   },
   "config": {

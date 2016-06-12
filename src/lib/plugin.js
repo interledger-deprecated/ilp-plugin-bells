@@ -41,6 +41,15 @@ class FiveBellsLedger extends EventEmitter2 {
   constructor (options) {
     super()
 
+    if (typeof options !== 'object') {
+      throw new TypeError('Expected an options object, received: ' + typeof options)
+    }
+
+    if (typeof options.auth !== 'object') {
+      throw new TypeError('Expected options.auth to be an object, received: ' +
+        typeof options.auth)
+    }
+
     this.id = options.id || null
     this.credentials = options.auth
     this.config = options.config
