@@ -51,9 +51,9 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     this.id = options.id || null
-    this.credentials = options.auth
-    this.config = options.config
+    this.credentials = Object.assign({}, options.auth)
     this.log = options.log || log
+    this.connector = options.connector || null
 
     this.debugReplyNotifications = options.debugReplyNotifications || false
     this.debugAutofund = options.debugAutofund || null
@@ -87,9 +87,19 @@ class FiveBellsLedger extends EventEmitter2 {
     this.id = res.body.ledger
     this.credentials.username = res.body.name
 
-    // Autofund debug feature
-    if (this.debugAutofund) {
-      yield this._autofund()
+    if (!res.body.connector && this.connector) {
+      const res2 = yield this._request({
+        uri: accountUri,
+        method: 'put',
+        body: {
+          name: res.body.name,
+          connector: this.connector
+        }
+      })
+
+      if (!res2 || res2.statusCode !== 200) {
+        throw new Error('Unable to set connector URI')
+      }
     }
 
     const streamUri = accountUri.replace('http', 'ws') + '/transfers'
