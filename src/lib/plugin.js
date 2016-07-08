@@ -257,11 +257,11 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new Error('Must be connected before getConnectors can be called')
     }
 
-    const res = yield request({
+    const res = yield requestRetry({
       method: 'GET',
       uri: this.id + '/connectors',
       json: true
-    })
+    }, 'Unable to get connectors for ledger ' + this.id, {})
     if (res.statusCode !== 200) {
       throw new Error('Unexpected status code: ' + res.statusCode)
     }

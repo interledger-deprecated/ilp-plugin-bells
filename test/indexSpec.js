@@ -1,6 +1,7 @@
 'use strict'
 
 const assert = require('chai').assert
+const expect = require('chai').expect
 const mock = require('mock-require')
 const nock = require('nock')
 const sinon = require('sinon')
@@ -47,7 +48,8 @@ describe('PluginBells', function () {
         auth: {
           account: 'http://red.example/accounts/mike',
           password: 'mike'
-        }
+        },
+        id: 'http://red.example'
       })
     })
 
@@ -64,6 +66,26 @@ describe('PluginBells', function () {
       assert.isTrue(this.plugin.isConnected())
 
       nockAccount.done()
+    })
+
+    it('should retry when getting connectors', function * () {
+      const nockConnectorsError = nock('http://red.example')
+        .get('/connectors')
+        .replyWithError('Error')
+
+      const nockConnectorsSuccess = nock('http://red.example')
+        .get('/connectors')
+        .reply(200, [{
+          id: 'http://red.example/accounts/bob',
+          name: 'bob',
+          connector: 'http://connector.example'
+        }])
+
+      const connectors = yield this.plugin.getConnectors()
+      expect(connectors).to.deep.equal(['http://connector.example'])
+
+      nockConnectorsError.done()
+      nockConnectorsSuccess.done()
     })
   })
 
