@@ -56,7 +56,6 @@ class FiveBellsLedger extends EventEmitter2 {
     this.connector = options.connector || null
 
     this.debugReplyNotifications = options.debugReplyNotifications || false
-    this.debugAutofund = options.debugAutofund || null
 
     this.connection = null
     this.connected = false
@@ -263,7 +262,7 @@ class FiveBellsLedger extends EventEmitter2 {
       json: true
     }, 'Unable to get connectors for ledger ' + this.id, {})
     if (res.statusCode !== 200) {
-      throw new Error('Unexpected status code: ' + res.statusCode)
+      throw new ExternalError('Unexpected status code: ' + res.statusCode)
     }
     return _.map(res.body, 'connector')
   }
@@ -453,23 +452,6 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new ExternalError('Remote error: status=' + transferRes.statusCode + ' body=' + transferRes.body)
     }
     return transferRes
-  }
-
-  * _autofund () {
-    this.log.info('autofund account at ' + this.credentials.account)
-    const admin = this.debugAutofund.admin
-    yield requestRetry({
-      method: 'put',
-      url: this.credentials.account,
-      json: true,
-      body: {
-        name: this.credentials.username,
-        balance: '1500000',
-        connector: this.debugAutofund.connector,
-        password: this.credentials.password,
-        fingerprint: this.credentials.fingerprint
-      }
-    }, 'could not create account at ledger ' + this.id, admin)
   }
 }
 
