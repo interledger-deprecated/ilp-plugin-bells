@@ -98,6 +98,24 @@ describe('PluginBells', function () {
         }
       })
 
+      it('retries if ledger accounts not available', function * () {
+        const nockAccountError = nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(400)
+
+        const nockAccountSuccess = nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+
+        yield this.plugin.connect()
+
+        nockAccountError.done()
+        nockAccountSuccess.done()
+      })
+
       describe('a connector', function () {
         beforeEach(function () {
           this.plugin = new PluginBells({

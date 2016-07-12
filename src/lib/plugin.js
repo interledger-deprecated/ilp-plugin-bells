@@ -28,6 +28,9 @@ function * requestRetry (opts, errorMessage, credentials) {
         ca: credentials.ca,
         json: true
       }, lodash.isUndefined)))
+      if (res.statusCode >= 400 && res.statusCode < 500) {
+        throw new Error(errorMessage)
+      }
       return res
     } catch (err) {
       log.warn(errorMessage)
@@ -75,11 +78,12 @@ class FiveBellsLedger extends EventEmitter2 {
 
     this.log.info('connecting to account ' + accountUri)
 
-    // Resolve ledger URI
-    const res = yield request.get({
+    const res = yield requestRetry({
+      method: 'GET',
       uri: accountUri,
       json: true
-    })
+    }, 'Failed to resolve ledger URI from account URI', this.credentials)
+
     if (!res.body.ledger) {
       throw new Error('Failed to resolve ledger URI from account URI')
     }
