@@ -1,6 +1,6 @@
 {
   "name": "ilp-plugin-bells",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "ILP Ledger plugin for five-bells-ledger",
   "main": "index.js",
   "scripts": {
