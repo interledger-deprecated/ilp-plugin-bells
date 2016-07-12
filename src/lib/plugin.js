@@ -426,10 +426,9 @@ class FiveBellsLedger extends EventEmitter2 {
             relatedResources.cancellation_condition_fulfillment)
         }
       }
-
-      if (!handled) {
-        throw new UnrelatedNotificationError('Notification does not seem related to connector')
-      }
+    }
+    if (!handled) {
+      throw new UnrelatedNotificationError('Notification does not seem related to connector')
     }
   }
 
