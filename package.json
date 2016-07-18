@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "lint": "eslint .",
-    "test": "istanbul test -- _mocha"
+    "test": "DEBUG=ilp-plugin-bells:* istanbul test -- _mocha"
   },
   "repository": {
     "type": "git",
@@ -54,10 +54,10 @@
   "dependencies": {
     "co": "^4.6.0",
     "co-request": "^1.0.0",
+    "debug": "^2.2.0",
     "eventemitter2": "^1.0.3",
     "five-bells-shared": "^16.1.0",
     "lodash": "^4.13.1",
-    "mag": "^0.9.1",
     "reconnect-core": "^1.2.0",
     "ws": "^1.1.0"
   }
