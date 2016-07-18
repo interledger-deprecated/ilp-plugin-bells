@@ -113,6 +113,9 @@ class FiveBellsLedger extends EventEmitter2 {
       }
     }
 
+    // Resolve ledger metadata
+    yield this.getInfo()
+
     const streamUri = accountUri.replace('http', 'ws') + '/transfers'
     debug('subscribing to ' + streamUri)
     const auth = this.credentials.password && this.credentials.username &&
@@ -218,9 +221,13 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!res || res.statusCode !== 200) throwErr()
     if (!res.body.precision || !res.body.scale) throwErr()
 
+    this.accountUriTemplate = res.body.urls.account
+
     return {
       precision: res.body.precision,
-      scale: res.body.scale
+      scale: res.body.scale,
+      currencyCode: res.body.currency_code,
+      currencySymbol: res.body.currency_symbol
     }
   }
 
@@ -466,11 +473,9 @@ class FiveBellsLedger extends EventEmitter2 {
     }
     return transferRes
   }
-}
 
-function wait (ms) {
-  return function (done) {
-    setTimeout(done, ms)
+  accountNameToUri (name) {
+    return this.accountUriTemplate.replace(':name', name)
   }
 }
 
