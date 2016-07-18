@@ -575,12 +575,23 @@ describe('PluginBells', function () {
     })
 
     describe('fulfillCondition', function () {
+      it('errors on improper fulfillment', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'garbage')
+          .reply(203)
+        this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'garbage')
+          .catch((err) => {
+            console.error(err)
+            done()
+          })
+      })
+
       it('puts the fulfillment', function * () {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
           .reply(201)
-        const state = yield this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
-        assert.equal(state, 'executed')
+        const result = yield this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
+        assert.equal(result, null)
       })
 
       it('throws an ExternalError on 500', function * () {
