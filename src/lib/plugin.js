@@ -339,9 +339,9 @@ class FiveBellsLedger extends EventEmitter2 {
     // TODO check the timestamp the ledger sends back
     // See https://github.com/interledger/five-bells-ledger/issues/149
     if (fulfillmentRes.statusCode === 200 || fulfillmentRes.statusCode === 201) {
-      return 'executed'
+      return null
     } else {
-      this.log.error('Failed to submit fulfillment for transfer: ' + transferID + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
+      throw new Error('Failed to submit fulfillment for transfer: ' + transferID + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
     }
   }
 
