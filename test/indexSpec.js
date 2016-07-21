@@ -22,6 +22,7 @@ describe('PluginBells', function () {
   describe('constructor', function () {
     it('should succeed with valid configuration', function () {
       const plugin = new PluginBells({
+        prefix: 'foo',
         auth: {
           account: 'http://red.example/accounts/mike',
           password: 'mike'
@@ -37,10 +38,18 @@ describe('PluginBells', function () {
       }, 'Expected an options object, received: undefined')
     })
 
+    it('should throw when options.prefix is missing', function () {
+      assert.throws(() => {
+        return new PluginBells({
+          auth: {} // no prefix
+        })
+      }, 'Expected options.prefix to be a string, received: undefined')
+    })
+
     it('should throw when auth information is missing', function () {
       assert.throws(() => {
         return new PluginBells({
-          // no auth
+          prefix: 'foo' // no auth
         })
       }, 'Expected options.auth to be an object, received: undefined')
     })
@@ -49,11 +58,11 @@ describe('PluginBells', function () {
   describe('instance', function () {
     beforeEach(function * () {
       this.plugin = new PluginBells({
+        prefix: 'example.red',
         auth: {
           account: 'http://red.example/accounts/mike',
           password: 'mike'
-        },
-        id: 'http://red.example'
+        }
       })
 
       this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
@@ -67,15 +76,12 @@ describe('PluginBells', function () {
             ledger: 'http://red.example',
             name: 'mike'
           })
-
-        const nockInfo = nock('http://red.example')
+        nock('http://red.example')
           .get('/')
           .reply(200, this.infoRedLedger)
 
-        yield this.plugin.connect()
-
+        yield assertResolve(this.plugin.connect(), null)
         assert.isTrue(this.plugin.isConnected())
-        nockInfo.done()
       })
 
       it('ignores if called twice', function * () {
@@ -92,7 +98,6 @@ describe('PluginBells', function () {
 
         yield this.plugin.connect()
         yield this.plugin.connect()
-
         assert.isTrue(this.plugin.isConnected())
         nockInfo.done()
       })
@@ -137,6 +142,7 @@ describe('PluginBells', function () {
       describe('a connector', function () {
         beforeEach(function () {
           this.plugin = new PluginBells({
+            prefix: 'example.red',
             connector: 'http://mark.example',
             auth: {
               account: 'http://red.example/accounts/mike',
@@ -172,37 +178,28 @@ describe('PluginBells', function () {
             assert(false)
           } catch (err) {
             assert(err instanceof ExternalError)
-            assert.equal(err.message, 'Remote error: status=500 body=undefined')
+            assert.equal(err.message, 'Remote error: status=500')
           }
         })
       })
     })
 
-    it('should retry when getting connectors', function * () {
-      const nockConnectorsError = nock('http://red.example')
-        .get('/connectors')
-        .replyWithError('Error')
-
-      const nockConnectorsSuccess = nock('http://red.example')
-        .get('/connectors')
-        .reply(200, [{
-          id: 'http://red.example/accounts/bob',
-          name: 'bob',
-          connector: 'http://connector.example'
-        }])
-
-      const connectors = yield this.plugin.getConnectors()
-      expect(connectors).to.deep.equal(['http://connector.example'])
-
-      nockConnectorsError.done()
-      nockConnectorsSuccess.done()
+    describe('getConnectors (not connectored)', function () {
+      it('fails when not connected', function * () {
+        try {
+          yield assertResolve(this.plugin.getConnectors(), undefined)
+          assert(false)
+        } catch (err) {
+          assert.equal(err.message, 'Must be connected before getConnectors can be called')
+        }
+      })
     })
   })
 
   describe('connected instance', function () {
     beforeEach(function * () {
       this.plugin = new PluginBells({
-        id: 'http://red.example',
+        prefix: 'example.red',
         auth: {
           account: 'http://red.example/accounts/mike',
           password: 'mike'
@@ -439,9 +436,7 @@ describe('PluginBells', function () {
         nock('http://red.example')
           .get('/')
           .reply(200, this.infoRedLedger)
-
-        const info = yield this.plugin.getInfo()
-        assert.deepEqual(info, {
+        yield assertResolve(this.plugin.getInfo(), {
           currencyCode: 'USD',
           currencySymbol: '$',
           precision: 2,
@@ -476,9 +471,15 @@ describe('PluginBells', function () {
       })
     })
 
+    describe('getPrefix', function () {
+      it('returns the plugin\'s prefix', function * () {
+        yield assertResolve(this.plugin.getPrefix(), 'example.red')
+      })
+    })
+
     describe('getAccount', function () {
       it('returns the plugin\'s account', function () {
-        assert.equal(this.plugin.getAccount(), 'http://red.example/accounts/mike')
+        assert.equal(this.plugin.getAccount(), 'example.red.mike')
       })
     })
 
@@ -487,8 +488,7 @@ describe('PluginBells', function () {
         nock('http://red.example')
           .get('/accounts/mike')
           .reply(200, {balance: '100'})
-        const balance = yield this.plugin.getBalance()
-        assert.equal(balance, '100')
+        yield assertResolve(this.plugin.getBalance(), '100')
       })
 
       it('throws an ExternalError on 500', function * () {
@@ -510,8 +510,7 @@ describe('PluginBells', function () {
         nock('http://red.example')
           .get('/connectors')
           .reply(200, [{connector: 'one'}, {connector: 'two'}])
-        const connectors = yield this.plugin.getConnectors()
-        assert.deepEqual(connectors, ['one', 'two'])
+        yield assertResolve(this.plugin.getConnectors(), ['one', 'two'])
       })
 
       it('throws an ExternalError on 500', function * () {
@@ -525,6 +524,22 @@ describe('PluginBells', function () {
           assert(err instanceof ExternalError)
           assert.equal(err.message, 'Unexpected status code: 500')
         }
+      })
+
+      it('should retry when getting connectors', function * () {
+        this.timeout(10000)
+        nock('http://red.example')
+          .get('/connectors').times(2)
+          .replyWithError('Error')
+          .get('/connectors')
+          .reply(200, [{
+            id: 'http://red.example/accounts/bob',
+            name: 'bob',
+            connector: 'http://connector.example'
+          }])
+
+        const connectors = yield this.plugin.getConnectors()
+        expect(connectors).to.deep.equal(['http://connector.example'])
       })
     })
 
@@ -547,13 +562,13 @@ describe('PluginBells', function () {
             }]
           })
           .reply(200)
-        yield this.plugin.send({
+        yield assertResolve(this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-          account: 'http://red.example/accounts/alice',
+          account: 'red.alice',
           amount: '123',
           noteToSelf: {source: 'something'},
           data: {foo: 'bar'}
-        })
+        }), null)
       })
 
       it('throws an ExternalError on 400', function * () {
@@ -575,13 +590,13 @@ describe('PluginBells', function () {
         try {
           yield this.plugin.send({
             id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-            account: 'http://red.example/accounts/alice',
+            account: 'red.alice',
             amount: '123'
           })
           assert(false)
         } catch (err) {
           assert(err instanceof ExternalError)
-          assert.equal(err.message, 'Remote error: status=400 body=[object Object]')
+          assert.equal(err.message, 'Remote error: status=400')
         }
       })
 
@@ -608,7 +623,7 @@ describe('PluginBells', function () {
 
         yield this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-          account: 'http://red.example/accounts/alice',
+          account: 'red.alice',
           amount: '123',
           cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
         })
@@ -631,8 +646,9 @@ describe('PluginBells', function () {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
           .reply(201)
-        const result = yield this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
-        assert.equal(result, null)
+        yield assertResolve(this.plugin.fulfillCondition(
+          '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          'cf:0:ZXhlY3V0ZQ'), null)
       })
 
       it('throws an ExternalError on 500', function * () {
@@ -643,9 +659,14 @@ describe('PluginBells', function () {
           yield this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
         } catch (err) {
           assert(err instanceof ExternalError)
-          assert.equal(err.message, 'Remote error: status=500 body=')
+          assert.equal(err.message, 'Remote error: status=500')
         }
       })
     })
   })
 })
+
+function * assertResolve (promise, expected) {
+  assert(promise instanceof Promise)
+  assert.deepEqual(yield promise, expected)
+}
