@@ -262,7 +262,7 @@ describe('PluginBells', function () {
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
 
-      if (this.stubReceive) sinon.assert.notCalled(this.stubReceive)
+      if (this.stubPrepare) sinon.assert.notCalled(this.stubPrepare)
       sinon.assert.calledOnce(this.stubFulfillExecutionCondition)
       sinon.assert.calledWith(this.stubFulfillExecutionCondition,
         Object.assign(this.transfer, {
@@ -322,14 +322,98 @@ describe('PluginBells', function () {
       })
     })
 
-    describe('notifications of incoming transfers', function () {
+    describe('notification of timeout', function () {
       beforeEach(function () {
         this.stubReceive = sinon.stub()
         this.stubFulfillExecutionCondition = sinon.stub()
+        this.stubIncomingCancel = sinon.stub()
+        this.stubOutgoingCancel = sinon.stub()
+        this.plugin.on('incoming_cancel', this.stubIncomingCancel)
+        this.plugin.on('outgoing_cancel', this.stubOutgoingCancel)
+        this.plugin.on('incoming_prepare', this.stubReceive)
+        this.plugin.on('outgoing_fulfill', this.stubFulfillExecutionCondition)
+
+        this.fiveBellsTransferMike = {
+          id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
+          ledger: 'http://red.example',
+          debits: [{
+            account: 'http://red.example/accounts/alice',
+            amount: '10'
+          }],
+          credits: [{
+            account: 'http://red.example/accounts/mike',
+            amount: '10'
+          }],
+          state: 'rejected'
+        }
+        this.fiveBellsTransferAlice = {
+          id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
+          ledger: 'http://red.example',
+          debits: [{
+            account: 'http://red.example/accounts/mike',
+            amount: '10'
+          }],
+          credits: [{
+            account: 'http://red.example/accounts/alice',
+            amount: '10'
+          }],
+          state: 'rejected'
+        }
+
+        this.transfer = {
+          id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
+          direction: 'incoming',
+          account: 'http://red.example/accounts/alice',
+          amount: '10',
+          expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
+        }
+      })
+
+      it('should handle a rejected transfer to mike', function * () {
+        this.wsRedLedger.send(JSON.stringify({
+          resource: Object.assign(this.fiveBellsTransferAlice, {
+            execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+          }),
+          related_resources: {
+            execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+          }
+        }))
+
+        yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
+
+        if (this.stubReceive) sinon.assert.notCalled(this.stubReceive)
+        sinon.assert.calledOnce(this.stubOutgoingCancel)
+        sinon.assert.notCalled(this.stubFulfillExecutionCondition)
+      })
+
+      it('should handle a rejected transfer to alice', function * () {
+        this.wsRedLedger.send(JSON.stringify({
+          resource: Object.assign(this.fiveBellsTransferMike, {
+            execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+          }),
+          related_resources: {
+            execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+          }
+        }))
+
+        yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
+
+        if (this.stubReceive) sinon.assert.notCalled(this.stubReceive)
+        sinon.assert.calledOnce(this.stubIncomingCancel)
+        sinon.assert.notCalled(this.stubFulfillExecutionCondition)
+      })
+    })
+
+    describe('notifications of incoming transfers', function () {
+      beforeEach(function () {
+        this.stubPrepare = sinon.stub()
+        this.stubExecute = sinon.stub()
+        this.stubFulfillExecutionCondition = sinon.stub()
         this.stubFulfillCancellationCondition = sinon.stub()
-        this.plugin.on('receive', this.stubReceive)
-        this.plugin.on('fulfill_execution_condition', this.stubFulfillExecutionCondition)
-        this.plugin.on('fulfill_cancellation_condition', this.stubFulfillCancellationCondition)
+        this.plugin.on('incoming_prepare', this.stubPrepare)
+        this.plugin.on('incoming_transfer', this.stubExecute)
+        this.plugin.on('incoming_fulfill', this.stubFulfillExecutionCondition)
+        this.plugin.on('incoming_cancel', this.stubFulfillCancellationCondition)
 
         this.fiveBellsTransferExecuted = {
           id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
@@ -365,8 +449,8 @@ describe('PluginBells', function () {
         }))
 
         yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
-        sinon.assert.calledOnce(this.stubReceive)
-        sinon.assert.calledWith(this.stubReceive, Object.assign(this.transfer, {
+        sinon.assert.calledOnce(this.stubPrepare)
+        sinon.assert.calledWith(this.stubPrepare, Object.assign(this.transfer, {
           expiresAt: this.fiveBellsTransferExecuted.expires_at
         }))
       })
@@ -378,8 +462,8 @@ describe('PluginBells', function () {
         }))
 
         yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
-        sinon.assert.calledOnce(this.stubReceive)
-        sinon.assert.calledWith(this.stubReceive, Object.assign(this.transfer, {
+        sinon.assert.calledOnce(this.stubExecute)
+        sinon.assert.calledWith(this.stubExecute, Object.assign(this.transfer, {
           expiresAt: this.fiveBellsTransferExecuted.expires_at
         }))
       })
@@ -394,8 +478,8 @@ describe('PluginBells', function () {
         }))
 
         yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
-        sinon.assert.calledOnce(this.stubReceive)
-        sinon.assert.calledWith(this.stubReceive, this.transfer)
+        sinon.assert.calledOnce(this.stubExecute)
+        sinon.assert.calledWith(this.stubExecute, this.transfer)
       })
     })
 
@@ -403,8 +487,12 @@ describe('PluginBells', function () {
       beforeEach(function () {
         this.stubFulfillExecutionCondition = sinon.stub()
         this.stubFulfillCancellationCondition = sinon.stub()
-        this.plugin.on('fulfill_execution_condition', this.stubFulfillExecutionCondition)
-        this.plugin.on('fulfill_cancellation_condition', this.stubFulfillCancellationCondition)
+        this.stubOutgoingPrepare = sinon.stub()
+        this.stubOutgoingExecute = sinon.stub()
+        this.plugin.on('outgoing_prepare', this.stubOutgoingPrepare)
+        this.plugin.on('outgoing_transfer', this.stubOutgoingExecute)
+        this.plugin.on('outgoing_fulfill', this.stubFulfillExecutionCondition)
+        this.plugin.on('outgoing_cancel', this.stubFulfillCancellationCondition)
 
         this.fiveBellsTransferExecuted = {
           id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
@@ -431,6 +519,33 @@ describe('PluginBells', function () {
         itEmitsFulfillExecutionCondition)
       it('should emit "fulfill_cancellation_condition" on outgoing rejected transfers',
         itEmitsFulfillCancellationCondition)
+
+      it('be notified of an outgoing prepare', function * () {
+        this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
+        this.fiveBellsTransferExecuted.state = 'prepared'
+        this.wsRedLedger.send(JSON.stringify({
+          resource: this.fiveBellsTransferExecuted
+        }))
+
+        yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
+        sinon.assert.calledOnce(this.stubOutgoingPrepare)
+        sinon.assert.calledWith(this.stubOutgoingPrepare, Object.assign(this.transfer, {
+          expiresAt: this.fiveBellsTransferExecuted.expires_at
+        }))
+      })
+
+      it('be notified of an outgoing execute', function * () {
+        this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
+        this.wsRedLedger.send(JSON.stringify({
+          resource: this.fiveBellsTransferExecuted
+        }))
+
+        yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
+        sinon.assert.calledOnce(this.stubOutgoingExecute)
+        sinon.assert.calledWith(this.stubOutgoingExecute, Object.assign(this.transfer, {
+          expiresAt: this.fiveBellsTransferExecuted.expires_at
+        }))
+      })
     })
 
     describe('disconnect', function () {
@@ -583,7 +698,7 @@ describe('PluginBells', function () {
         }), null)
       })
 
-      it('throws an ExternalError on 400', function * () {
+      it('throws an ExternalError on 400', function (done) {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', {
             id: 'http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -599,17 +714,15 @@ describe('PluginBells', function () {
             }]
           })
           .reply(400, {id: 'SomeError'})
-        try {
-          yield this.plugin.send({
-            id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-            account: 'red.alice',
-            amount: '123'
-          })
-          assert(false)
-        } catch (err) {
-          assert(err instanceof ExternalError)
+
+        this.plugin.send({
+          id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          account: 'red.alice',
+          amount: '123'
+        }).catch((err) => {
           assert.equal(err.message, 'Remote error: status=400')
-        }
+          done()
+        })
       })
 
       it('sets up case notifications when "cases" is provided', function * () {
@@ -640,6 +753,22 @@ describe('PluginBells', function () {
           cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
         })
       })
+
+      it('handles unexpected status on cases notification', function (done) {
+        nock('http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086')
+          .post('/targets', ['http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment'])
+          .reply(400)
+
+        this.plugin.send({
+          id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          account: 'red.alice',
+          amount: '123',
+          cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
+        }).catch((err) => {
+          assert.equal(err.message, 'Unexpected status code: 400')
+          done()
+        })
+      })
     })
 
     describe('fulfillCondition', function () {
@@ -649,7 +778,9 @@ describe('PluginBells', function () {
           .reply(203)
         this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'garbage')
           .catch((err) => {
-            console.error(err)
+            assert.equal(err.message, 'Failed to submit fulfillment for' +
+              ' transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c' +
+              ' Error: undefined')
             done()
           })
       })
