@@ -114,7 +114,8 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     // Resolve ledger metadata
-    yield this.getInfo()
+    const ledgerMetadata = yield this._fetchLedgerMetadata()
+    this.accountUriTemplate = ledgerMetadata.urls.account
 
     const streamUri = accountUri.replace('http', 'ws') + '/transfers'
     debug('subscribing to ' + streamUri)
@@ -203,7 +204,18 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getInfo () {
-    debug('request info %s', this.id)
+    const ledgerMetadata = yield this._fetchLedgerMetadata()
+
+    return {
+      precision: ledgerMetadata.precision,
+      scale: ledgerMetadata.scale,
+      currencyCode: ledgerMetadata.currency_code,
+      currencySymbol: ledgerMetadata.currency_symbol
+    }
+  }
+
+  * _fetchLedgerMetadata () {
+    debug('request ledger metadata %s', this.id)
     function throwErr () {
       throw new ExternalError('Unable to determine ledger precision')
     }
@@ -221,14 +233,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!res || res.statusCode !== 200) throwErr()
     if (!res.body.precision || !res.body.scale) throwErr()
 
-    this.accountUriTemplate = res.body.urls.account
-
-    return {
-      precision: res.body.precision,
-      scale: res.body.scale,
-      currencyCode: res.body.currency_code,
-      currencySymbol: res.body.currency_symbol
-    }
+    return res.body
   }
 
   getAccount () {
