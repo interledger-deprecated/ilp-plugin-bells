@@ -3,7 +3,8 @@ module.exports = function (wallaby) {
     files: [
       'src/**/*.js',
       'index.js',
-      'test/helpers/*.js'
+      'test/helpers/*.js',
+      'test/data/*.json'
     ],
 
     tests: [

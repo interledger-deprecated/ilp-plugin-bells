@@ -1,0 +1,9 @@
+{
+  "scale": 4,
+  "precision": 2,
+  "currency_code": "USD",
+  "currency_symbol": "$",
+  "urls": {
+    "account": "http://red.example/accounts/:name"
+  }
+}

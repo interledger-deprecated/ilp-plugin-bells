@@ -1,24 +1,32 @@
 'use strict'
 
-const _ = require('lodash')
 const co = require('co')
-const lodash = require('lodash')
 const request = require('co-request')
 const WebSocket = require('ws')
 const reconnectCore = require('reconnect-core')
-const log = require('mag')('ilp-plugin-bells:plugin')
+const debug = require('debug')('ilp-plugin-bells:plugin')
 const ExternalError = require('../errors/external-error')
 const UnrelatedNotificationError = require('../errors/unrelated-notification-error')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
+const isUndefined = require('lodash/fp/isUndefined')
+const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
+const map = require('lodash/map')
+const defaults = require('lodash/defaults')
 
 const backoffMin = 1000
 const backoffMax = 30000
+
+function wait (ms) {
+  return function (done) {
+    setTimeout(done, ms)
+  }
+}
 
 function * requestRetry (opts, errorMessage, credentials) {
   let delay = backoffMin
   while (true) {
     try {
-      let res = yield request(lodash.defaults(opts, lodash.omitBy({
+      let res = yield request(defaults(opts, omitUndefined({
         auth: credentials.password && credentials.username && {
           user: credentials.username,
           pass: credentials.password
@@ -27,13 +35,13 @@ function * requestRetry (opts, errorMessage, credentials) {
         key: credentials.key,
         ca: credentials.ca,
         json: true
-      }, lodash.isUndefined)))
+      })))
       if (res.statusCode >= 400 && res.statusCode < 500) {
         throw new Error(errorMessage)
       }
       return res
     } catch (err) {
-      log.warn(errorMessage)
+      debug('http request failed: ' + errorMessage)
       delay = Math.min(Math.floor(1.5 * delay), backoffMax)
       yield wait(delay)
     }
@@ -55,7 +63,6 @@ class FiveBellsLedger extends EventEmitter2 {
 
     this.id = options.id || null
     this.credentials = Object.assign({}, options.auth)
-    this.log = options.log || log
     this.connector = options.connector || null
 
     this.debugReplyNotifications = options.debugReplyNotifications || false
@@ -72,12 +79,13 @@ class FiveBellsLedger extends EventEmitter2 {
     const accountUri = this.credentials.account
 
     if (this.connection) {
-      this.log.warn('already connected, ignoring connection request')
+      debug('already connected, ignoring connection request')
       return Promise.resolve(null)
     }
 
-    this.log.info('connecting to account ' + accountUri)
+    debug('connecting to account ' + accountUri)
 
+    // Resolve account information
     const res = yield requestRetry({
       method: 'GET',
       uri: accountUri,
@@ -105,8 +113,12 @@ class FiveBellsLedger extends EventEmitter2 {
       }
     }
 
+    // Resolve ledger metadata
+    const ledgerMetadata = yield this._fetchLedgerMetadata()
+    this.accountUriTemplate = ledgerMetadata.urls.account
+
     const streamUri = accountUri.replace('http', 'ws') + '/transfers'
-    this.log.debug('subscribing to ' + streamUri)
+    debug('subscribing to ' + streamUri)
     const auth = this.credentials.password && this.credentials.username &&
                    this.credentials.username + ':' + this.credentials.password
     const options = {
@@ -119,17 +131,17 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     const reconnect = reconnectCore(function () {
-      return new WebSocket(streamUri, lodash.omitBy(options, lodash.isUndefined))
+      return new WebSocket(streamUri, omitUndefined(options))
     })
 
     return new Promise((resolve, reject) => {
       this.connection = reconnect({immediate: true}, (ws) => {
         ws.on('open', () => {
-          this.log.info('ws connected to ' + streamUri)
+          debug('ws connected to ' + streamUri)
         })
         ws.on('message', (msg) => {
           const notification = JSON.parse(msg)
-          this.log.debug('notify transfer', notification.resource.state, notification.resource.id)
+          debug('notify transfer', notification.resource.state, notification.resource.id)
 
           co.wrap(this._handleNotification)
             .call(this, notification.resource, notification.related_resources)
@@ -139,7 +151,7 @@ class FiveBellsLedger extends EventEmitter2 {
               }
             })
             .catch((err) => {
-              this.log.warn('failure while processing notification: ' +
+              debug('failure while processing notification: ' +
                 (err && err.stack) ? err.stack : err)
               if (this.debugReplyNotifications) {
                 ws.send(JSON.stringify({
@@ -153,7 +165,7 @@ class FiveBellsLedger extends EventEmitter2 {
             })
         })
         ws.on('close', () => {
-          this.log.info('ws disconnected from ' + streamUri)
+          debug('ws disconnected from ' + streamUri)
         })
 
         // reconnect-core expects the disconnect method to be called: `end`
@@ -169,7 +181,7 @@ class FiveBellsLedger extends EventEmitter2 {
         this.emit('disconnect')
       })
       .on('error', (err) => {
-        this.log.warn('ws error on ' + streamUri + ': ' + err)
+        debug('ws error on ' + streamUri + ': ' + err)
         reject(err)
       })
       .connect()
@@ -192,7 +204,18 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getInfo () {
-    this.log.debug('getInfo', this.id)
+    const ledgerMetadata = yield this._fetchLedgerMetadata()
+
+    return {
+      precision: ledgerMetadata.precision,
+      scale: ledgerMetadata.scale,
+      currencyCode: ledgerMetadata.currency_code,
+      currencySymbol: ledgerMetadata.currency_symbol
+    }
+  }
+
+  * _fetchLedgerMetadata () {
+    debug('request ledger metadata %s', this.id)
     function throwErr () {
       throw new ExternalError('Unable to determine ledger precision')
     }
@@ -202,7 +225,7 @@ class FiveBellsLedger extends EventEmitter2 {
       res = yield request(this.id, {json: true})
     } catch (e) {
       if (!res || res.statusCode !== 200) {
-        this.log.debug('getInfo', e)
+        debug('getInfo error %s', e)
         throwErr()
       }
     }
@@ -210,10 +233,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!res || res.statusCode !== 200) throwErr()
     if (!res.body.precision || !res.body.scale) throwErr()
 
-    return {
-      precision: res.body.precision,
-      scale: res.body.scale
-    }
+    return res.body
   }
 
   getAccount () {
@@ -268,7 +288,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (res.statusCode !== 200) {
       throw new ExternalError('Unexpected status code: ' + res.statusCode)
     }
-    return _.map(res.body, 'connector')
+    return map(res.body, 'connector')
   }
 
   send (transfer) {
@@ -276,30 +296,32 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _send (transfer) {
-    const fiveBellsTransfer = {
+    const fiveBellsTransfer = omitUndefined({
       id: this.id + '/transfers/' + transfer.id,
       ledger: this.id,
-      debits: [{
+      debits: [omitUndefined({
         account: this.credentials.account,
         amount: transfer.amount,
         authorized: true,
         memo: transfer.noteToSelf
-      }],
-      credits: [{
+      })],
+      credits: [omitUndefined({
+        // TODO: We should expect an account identifier, not a full URI
+        // account: this.accountNameToUri(transfer.account),
         account: transfer.account,
         amount: transfer.amount,
         memo: transfer.data
-      }],
+      })],
       execution_condition: transfer.executionCondition,
       cancellation_condition: transfer.cancellationCondition,
       expires_at: transfer.expiresAt,
       additional_info: transfer.cases ? { cases: transfer.cases } : undefined
-    }
+    })
 
     // If Atomic mode, add destination transfer to notification targets
     if (transfer.cases) {
       for (let caseUri of transfer.cases) {
-        this.log.debug('Add case notification for ' + caseUri)
+        debug('add case notification for ' + caseUri)
         const res = yield request({
           method: 'POST',
           uri: caseUri + '/targets',
@@ -313,7 +335,7 @@ class FiveBellsLedger extends EventEmitter2 {
       }
     }
 
-    this.log.debug('submitting transfer ' + fiveBellsTransfer.id)
+    debug('submitting transfer %s', fiveBellsTransfer.id)
     yield this._request({
       method: 'put',
       uri: fiveBellsTransfer.id,
@@ -361,7 +383,7 @@ class FiveBellsLedger extends EventEmitter2 {
       if (credit.account === this.credentials.account) {
         handled = true
 
-        const transfer = lodash.omitBy({
+        const transfer = omitUndefined({
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'incoming',
           // TODO: What if there are multiple debits?
@@ -374,7 +396,7 @@ class FiveBellsLedger extends EventEmitter2 {
           cases: fiveBellsTransfer.additional_info && fiveBellsTransfer.additional_info.cases
             ? fiveBellsTransfer.additional_info.cases
             : undefined
-        }, lodash.isUndefined)
+        })
 
         if (fiveBellsTransfer.state === 'prepared' ||
             (fiveBellsTransfer.state === 'executed' && !transfer.executionCondition)) {
@@ -403,7 +425,7 @@ class FiveBellsLedger extends EventEmitter2 {
         // should never be more than one credit.
         const credit = fiveBellsTransfer.credits[0]
 
-        const transfer = lodash.omitBy({
+        const transfer = omitUndefined({
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'outgoing',
           account: credit.account,
@@ -416,7 +438,7 @@ class FiveBellsLedger extends EventEmitter2 {
           cases: fiveBellsTransfer.additional_info && fiveBellsTransfer.additional_info.cases
             ? fiveBellsTransfer.additional_info.cases
             : undefined
-        }, lodash.isUndefined)
+        })
 
         if (fiveBellsTransfer.state === 'executed' &&
             relatedResources && relatedResources.execution_condition_fulfillment) {
@@ -440,7 +462,7 @@ class FiveBellsLedger extends EventEmitter2 {
     // TODO: check before this point that we actually have
     // credentials for the ledgers we're asked to settle between
     const credentials = this.credentials
-    const transferRes = yield request(lodash.defaults(opts, lodash.omitBy({
+    const transferRes = yield request(defaults(opts, omitUndefined({
       auth: credentials.username && credentials.password && {
         user: credentials.username,
         pass: credentials.password
@@ -449,18 +471,16 @@ class FiveBellsLedger extends EventEmitter2 {
       key: credentials.key,
       ca: credentials.ca,
       json: true
-    }, lodash.isUndefined)))
+    })))
     // TODO for source transfers: handle this so we actually get our money back
     if (transferRes.statusCode >= 400) {
       throw new ExternalError('Remote error: status=' + transferRes.statusCode + ' body=' + transferRes.body)
     }
     return transferRes
   }
-}
 
-function wait (ms) {
-  return function (done) {
-    setTimeout(done, ms)
+  accountNameToUri (name) {
+    return this.accountUriTemplate.replace(':name', name)
   }
 }
 

@@ -7,6 +7,7 @@ const nock = require('nock')
 const sinon = require('sinon')
 const wsHelper = require('./helpers/ws')
 const ExternalError = require('../src/errors/external-error')
+const cloneDeep = require('lodash/cloneDeep')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -54,6 +55,8 @@ describe('PluginBells', function () {
         },
         id: 'http://red.example'
       })
+
+      this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
     })
 
     describe('connect', function () {
@@ -65,9 +68,14 @@ describe('PluginBells', function () {
             name: 'mike'
           })
 
+        const nockInfo = nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+
         yield this.plugin.connect()
 
         assert.isTrue(this.plugin.isConnected())
+        nockInfo.done()
       })
 
       it('ignores if called twice', function * () {
@@ -78,10 +86,15 @@ describe('PluginBells', function () {
             name: 'mike'
           })
 
+        const nockInfo = nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+
         yield this.plugin.connect()
         yield this.plugin.connect()
 
         assert.isTrue(this.plugin.isConnected())
+        nockInfo.done()
       })
 
       it('fails if the response is invalid', function * () {
@@ -110,10 +123,15 @@ describe('PluginBells', function () {
             name: 'mike'
           })
 
+        const nockInfo = nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+
         yield this.plugin.connect()
 
         nockAccountError.done()
         nockAccountSuccess.done()
+        nockInfo.done()
       })
 
       describe('a connector', function () {
@@ -127,16 +145,23 @@ describe('PluginBells', function () {
           })
         })
 
-        it('creates an account', function * () {
+        it('sets the connector field', function * () {
           nock('http://red.example')
             .get('/accounts/mike')
             .reply(200, { ledger: 'http://red.example', name: 'mike' })
             .put('/accounts/mike', { name: 'mike', connector: 'http://mark.example' })
             .reply(200)
+
+          const nockInfo = nock('http://red.example')
+            .get('/')
+            .reply(200, this.infoRedLedger)
+
           yield this.plugin.connect()
+
+          nockInfo.done()
         })
 
-        it('throws an ExternalError if unable the create an account', function * () {
+        it('throws an ExternalError if unable to set the connector field', function * () {
           nock('http://red.example')
             .get('/accounts/mike')
             .reply(200, { ledger: 'http://red.example', name: 'mike' })
@@ -189,16 +214,27 @@ describe('PluginBells', function () {
         }
       })
 
-      nock('http://red.example')
+      this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
+
+      const nockAccount = nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
           ledger: 'http://red.example',
           name: 'mike'
         })
 
+      const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
+
+      const nockInfo = nock('http://red.example')
+        .get('/')
+        .reply(200, infoRedLedger)
+
       this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
 
       yield this.plugin.connect()
+
+      nockAccount.done()
+      nockInfo.done()
     })
 
     afterEach(function * () {
@@ -402,10 +438,15 @@ describe('PluginBells', function () {
       it('gets the precision and scale', function * () {
         nock('http://red.example')
           .get('/')
-          .reply(200, {precision: 10, scale: 4, foo: 'bar'})
+          .reply(200, this.infoRedLedger)
 
         const info = yield this.plugin.getInfo()
-        assert.deepEqual(info, {precision: 10, scale: 4})
+        assert.deepEqual(info, {
+          currencyCode: 'USD',
+          currencySymbol: '$',
+          precision: 2,
+          scale: 4
+        })
       })
 
       it('throws an ExternalError on 500', function * () {
