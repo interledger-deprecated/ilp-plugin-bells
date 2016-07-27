@@ -61,6 +61,10 @@ class FiveBellsLedger extends EventEmitter2 {
         typeof options.prefix)
     }
 
+    if (options.prefix.slice(-1) !== '.') {
+      throw new Error('Expected options.prefix to end with "."')
+    }
+
     if (typeof options.auth !== 'object') {
       throw new TypeError('Expected options.auth to be an object, received: ' +
         typeof options.auth)
@@ -247,7 +251,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   getAccount () {
-    return this.prefix + '.' + this.credentials.username
+    return this.prefix + this.credentials.username
   }
 
   _validateTransfer (transfer) {

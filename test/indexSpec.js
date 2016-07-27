@@ -22,7 +22,7 @@ describe('PluginBells', function () {
   describe('constructor', function () {
     it('should succeed with valid configuration', function () {
       const plugin = new PluginBells({
-        prefix: 'foo',
+        prefix: 'foo.',
         auth: {
           account: 'http://red.example/accounts/mike',
           password: 'mike'
@@ -46,10 +46,22 @@ describe('PluginBells', function () {
       }, 'Expected options.prefix to be a string, received: undefined')
     })
 
+    it('should throw when options.prefix is an invalid prefix', function () {
+      assert.throws(() => {
+        return new PluginBells({
+          prefix: 'foo', // no trailing "."
+          auth: {
+            account: 'http://red.example/accounts/mike',
+            password: 'mike'
+          }
+        })
+      }, 'Expected options.prefix to end with "."')
+    })
+
     it('should throw when auth information is missing', function () {
       assert.throws(() => {
         return new PluginBells({
-          prefix: 'foo' // no auth
+          prefix: 'foo.' // no auth
         })
       }, 'Expected options.auth to be an object, received: undefined')
     })
@@ -58,7 +70,7 @@ describe('PluginBells', function () {
   describe('instance', function () {
     beforeEach(function * () {
       this.plugin = new PluginBells({
-        prefix: 'example.red',
+        prefix: 'example.red.',
         auth: {
           account: 'http://red.example/accounts/mike',
           password: 'mike'
@@ -142,7 +154,7 @@ describe('PluginBells', function () {
       describe('a connector', function () {
         beforeEach(function () {
           this.plugin = new PluginBells({
-            prefix: 'example.red',
+            prefix: 'example.red.',
             connector: 'http://mark.example',
             auth: {
               account: 'http://red.example/accounts/mike',
@@ -199,7 +211,7 @@ describe('PluginBells', function () {
   describe('connected instance', function () {
     beforeEach(function * () {
       this.plugin = new PluginBells({
-        prefix: 'example.red',
+        prefix: 'example.red.',
         auth: {
           account: 'http://red.example/accounts/mike',
           password: 'mike'
@@ -473,7 +485,7 @@ describe('PluginBells', function () {
 
     describe('getPrefix', function () {
       it('returns the plugin\'s prefix', function * () {
-        yield assertResolve(this.plugin.getPrefix(), 'example.red')
+        yield assertResolve(this.plugin.getPrefix(), 'example.red.')
       })
     })
 
