@@ -25,6 +25,7 @@ function wait (ms) {
 function * requestRetry (opts, errorMessage, credentials) {
   let delay = backoffMin
   while (true) {
+    debug('connecting to account ' + opts.uri)
     try {
       let res = yield request(defaults(opts, omitUndefined({
         auth: credentials.password && credentials.username && {
@@ -37,6 +38,7 @@ function * requestRetry (opts, errorMessage, credentials) {
         json: true
       })))
       if (res.statusCode >= 400 && res.statusCode < 500) {
+        debug('request status ' + res.statusCode + ' retrying connection')
         throw new Error(errorMessage)
       }
       return res
@@ -82,8 +84,6 @@ class FiveBellsLedger extends EventEmitter2 {
       debug('already connected, ignoring connection request')
       return Promise.resolve(null)
     }
-
-    debug('connecting to account ' + accountUri)
 
     // Resolve account information
     const res = yield requestRetry({
