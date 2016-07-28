@@ -22,8 +22,8 @@ describe('PluginBells', function () {
   describe('constructor', function () {
     it('should succeed with valid configuration', function () {
       const plugin = new PluginBells({
-        prefix: 'foo.',
         auth: {
+          prefix: 'foo.',
           account: 'http://red.example/accounts/mike',
           password: 'mike'
         }
@@ -43,25 +43,25 @@ describe('PluginBells', function () {
         return new PluginBells({
           auth: {} // no prefix
         })
-      }, 'Expected options.prefix to be a string, received: undefined')
+      }, 'Expected options.auth.prefix to be a string, received: undefined')
     })
 
     it('should throw when options.prefix is an invalid prefix', function () {
       assert.throws(() => {
         return new PluginBells({
-          prefix: 'foo', // no trailing "."
           auth: {
+            prefix: 'foo', // no trailing "."
             account: 'http://red.example/accounts/mike',
             password: 'mike'
           }
         })
-      }, 'Expected options.prefix to end with "."')
+      }, 'Expected options.auth.prefix to end with "."')
     })
 
     it('should throw when auth information is missing', function () {
       assert.throws(() => {
         return new PluginBells({
-          prefix: 'foo.' // no auth
+          // no auth
         })
       }, 'Expected options.auth to be an object, received: undefined')
     })
@@ -70,8 +70,8 @@ describe('PluginBells', function () {
   describe('instance', function () {
     beforeEach(function * () {
       this.plugin = new PluginBells({
-        prefix: 'example.red.',
         auth: {
+          prefix: 'example.red.',
           account: 'http://red.example/accounts/mike',
           password: 'mike'
         }
@@ -154,9 +154,9 @@ describe('PluginBells', function () {
       describe('a connector', function () {
         beforeEach(function () {
           this.plugin = new PluginBells({
-            prefix: 'example.red.',
             connector: 'http://mark.example',
             auth: {
+              prefix: 'example.red.',
               account: 'http://red.example/accounts/mike',
               password: 'mike'
             }
@@ -211,8 +211,8 @@ describe('PluginBells', function () {
   describe('connected instance', function () {
     beforeEach(function * () {
       this.plugin = new PluginBells({
-        prefix: 'example.red.',
         auth: {
+          prefix: 'example.red.',
           account: 'http://red.example/accounts/mike',
           password: 'mike'
         },
