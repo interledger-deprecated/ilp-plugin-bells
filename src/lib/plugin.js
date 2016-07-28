@@ -61,7 +61,17 @@ class FiveBellsLedger extends EventEmitter2 {
         typeof options.auth)
     }
 
-    this.id = options.id || null
+    if (typeof options.auth.prefix !== 'string') {
+      throw new TypeError('Expected options.auth.prefix to be a string, received: ' +
+        typeof options.prefix)
+    }
+
+    if (options.auth.prefix.slice(-1) !== '.') {
+      throw new Error('Expected options.auth.prefix to end with "."')
+    }
+
+    this.prefix = options.auth.prefix
+    this.host = options.host || null
     this.credentials = Object.assign({}, options.auth)
     this.connector = options.connector || null
 
@@ -95,7 +105,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!res.body.ledger) {
       throw new Error('Failed to resolve ledger URI from account URI')
     }
-    this.id = res.body.ledger
+    this.host = res.body.ledger
     this.credentials.username = res.body.name
 
     if (!res.body.connector && this.connector) {
@@ -215,14 +225,14 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _fetchLedgerMetadata () {
-    debug('request ledger metadata %s', this.id)
+    debug('request ledger metadata %s', this.host)
     function throwErr () {
       throw new ExternalError('Unable to determine ledger precision')
     }
 
     let res
     try {
-      res = yield request(this.id, {json: true})
+      res = yield request(this.host, {json: true})
     } catch (e) {
       if (!res || res.statusCode !== 200) {
         debug('getInfo error %s', e)
@@ -236,8 +246,12 @@ class FiveBellsLedger extends EventEmitter2 {
     return res.body
   }
 
+  getPrefix () {
+    return Promise.resolve(this.prefix)
+  }
+
   getAccount () {
-    return this.credentials.account
+    return this.prefix + this.credentials.username
   }
 
   _validateTransfer (transfer) {
@@ -276,15 +290,15 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getConnectors () {
-    if (!this.id) {
+    if (!this.host) {
       throw new Error('Must be connected before getConnectors can be called')
     }
 
     const res = yield requestRetry({
       method: 'GET',
-      uri: this.id + '/connectors',
+      uri: this.host + '/connectors',
       json: true
-    }, 'Unable to get connectors for ledger ' + this.id, {})
+    }, 'Unable to get connectors for ledger ' + this.host, {})
     if (res.statusCode !== 200) {
       throw new ExternalError('Unexpected status code: ' + res.statusCode)
     }
@@ -296,9 +310,10 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _send (transfer) {
+    const sourceAddress = parseAddress(transfer.account)
     const fiveBellsTransfer = omitUndefined({
-      id: this.id + '/transfers/' + transfer.id,
-      ledger: this.id,
+      id: this.host + '/transfers/' + transfer.id,
+      ledger: this.host,
       debits: [omitUndefined({
         account: this.credentials.account,
         amount: transfer.amount,
@@ -306,9 +321,7 @@ class FiveBellsLedger extends EventEmitter2 {
         memo: transfer.noteToSelf
       })],
       credits: [omitUndefined({
-        // TODO: We should expect an account identifier, not a full URI
-        // account: this.accountNameToUri(transfer.account),
-        account: transfer.account,
+        account: this.host + '/accounts/' + encodeURIComponent(sourceAddress.username),
         amount: transfer.amount,
         memo: transfer.data
       })],
@@ -354,7 +367,7 @@ class FiveBellsLedger extends EventEmitter2 {
   * _fulfillCondition (transferID, conditionFulfillment) {
     const fulfillmentRes = yield this._request({
       method: 'put',
-      uri: this.id + '/transfers/' + transferID + '/fulfillment',
+      uri: this.host + '/transfers/' + transferID + '/fulfillment',
       body: conditionFulfillment,
       json: false
     })
@@ -474,13 +487,24 @@ class FiveBellsLedger extends EventEmitter2 {
     })))
     // TODO for source transfers: handle this so we actually get our money back
     if (transferRes.statusCode >= 400) {
-      throw new ExternalError('Remote error: status=' + transferRes.statusCode + ' body=' + transferRes.body)
+      const error = new ExternalError('Remote error: status=' + transferRes.statusCode)
+      error.status = transferRes.statusCode
+      error.response = transferRes
+      throw error
     }
     return transferRes
   }
 
   accountNameToUri (name) {
     return this.accountUriTemplate.replace(':name', name)
+  }
+}
+
+function parseAddress (address) {
+  const addressParts = address.split('.')
+  return {
+    ledger: addressParts.slice(0, -1).join('.'),
+    username: addressParts[addressParts.length - 1]
   }
 }
 

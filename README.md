@@ -16,6 +16,7 @@ const Client = require('ilp').Client
 const client = new Client({
   type: 'bells',
   auth: {
+    prefix: 'ilpdemo.red.',
     // Account URI
     account: 'https://red.ilpdemo.org/ledger/accounts/alice',
     password: 'alice'
