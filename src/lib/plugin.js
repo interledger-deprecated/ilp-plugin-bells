@@ -65,7 +65,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
     if (typeof options.auth.prefix !== 'string') {
       throw new TypeError('Expected options.auth.prefix to be a string, received: ' +
-        typeof options.prefix)
+        typeof options.auth.prefix)
     }
 
     if (options.auth.prefix.slice(-1) !== '.') {
@@ -401,6 +401,7 @@ class FiveBellsLedger extends EventEmitter2 {
           direction: 'incoming',
           // TODO: What if there are multiple debits?
           account: fiveBellsTransfer.debits[0].account,
+          ledger: this.prefix,
           amount: credit.amount,
           data: credit.memo,
           executionCondition: fiveBellsTransfer.execution_condition,
@@ -442,6 +443,7 @@ class FiveBellsLedger extends EventEmitter2 {
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'outgoing',
           account: credit.account,
+          ledger: this.prefix,
           amount: debit.amount,
           data: credit.memo,
           noteToSelf: debit.memo,

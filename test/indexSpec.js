@@ -41,9 +41,9 @@ describe('PluginBells', function () {
     it('should throw when options.prefix is missing', function () {
       assert.throws(() => {
         return new PluginBells({
-          auth: {} // no prefix
+          auth: {prefix: 5} // prefix is wrong type
         })
-      }, 'Expected options.auth.prefix to be a string, received: undefined')
+      }, 'Expected options.auth.prefix to be a string, received: number')
     })
 
     it('should throw when options.prefix is an invalid prefix', function () {
@@ -348,6 +348,7 @@ describe('PluginBells', function () {
           id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
           direction: 'incoming',
           account: 'http://red.example/accounts/alice',
+          ledger: 'example.red.',
           amount: '10'
         }
       })
@@ -423,6 +424,7 @@ describe('PluginBells', function () {
           id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
           direction: 'outgoing',
           account: 'http://red.example/accounts/alice',
+          ledger: 'example.red.',
           amount: '10'
         }
       })
