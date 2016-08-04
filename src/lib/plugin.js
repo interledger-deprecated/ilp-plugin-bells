@@ -58,23 +58,24 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new TypeError('Expected an options object, received: ' + typeof options)
     }
 
-    if (typeof options.auth !== 'object') {
-      throw new TypeError('Expected options.auth to be an object, received: ' +
-        typeof options.auth)
+    if (typeof options.prefix !== 'string') {
+      throw new TypeError('Expected options.prefix to be a string, received: ' +
+        typeof options.prefix)
     }
 
-    if (typeof options.auth.prefix !== 'string') {
-      throw new TypeError('Expected options.auth.prefix to be a string, received: ' +
-        typeof options.auth.prefix)
+    if (options.prefix.slice(-1) !== '.') {
+      throw new Error('Expected options.prefix to end with "."')
     }
 
-    if (options.auth.prefix.slice(-1) !== '.') {
-      throw new Error('Expected options.auth.prefix to end with "."')
-    }
-
-    this.prefix = options.auth.prefix
+    this.prefix = options.prefix
     this.host = options.host || null
-    this.credentials = Object.assign({}, options.auth)
+    this.credentials = {
+      account: options.account,
+      password: options.password,
+      cert: options.cert,
+      key: options.key,
+      ca: options.ca
+    }
     this.connector = options.connector || null
 
     this.debugReplyNotifications = options.debugReplyNotifications || false
