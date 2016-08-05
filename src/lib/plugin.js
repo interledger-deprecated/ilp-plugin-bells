@@ -204,6 +204,7 @@ class FiveBellsLedger extends EventEmitter2 {
       this.connection.disconnect()
       this.connection = null
     }
+    return Promise.resolve(null)
   }
 
   isConnected () {
@@ -413,21 +414,25 @@ class FiveBellsLedger extends EventEmitter2 {
             : undefined
         })
 
-        if (fiveBellsTransfer.state === 'prepared' ||
-            (fiveBellsTransfer.state === 'executed' && !transfer.executionCondition)) {
-          yield this.emitAsync('receive', transfer)
+        if (fiveBellsTransfer.state === 'prepared') {
+          yield this.emitAsync('incoming_prepare', transfer)
+        }
+        if (fiveBellsTransfer.state === 'executed' && !transfer.executionCondition) {
+          yield this.emitAsync('incoming_transfer', transfer)
         }
 
         if (fiveBellsTransfer.state === 'executed' && relatedResources &&
             relatedResources.execution_condition_fulfillment) {
-          yield this.emitAsync('fulfill_execution_condition', transfer,
+          yield this.emitAsync('incoming_fulfill', transfer,
             relatedResources.execution_condition_fulfillment)
         }
 
         if (fiveBellsTransfer.state === 'rejected' && relatedResources &&
             relatedResources.cancellation_condition_fulfillment) {
-          yield this.emitAsync('fulfill_cancellation_condition', transfer,
+          yield this.emitAsync('incoming_cancel', transfer,
             relatedResources.cancellation_condition_fulfillment)
+        } else if (fiveBellsTransfer.state === 'rejected') {
+          yield this.emitAsync('incoming_cancel', transfer, 'transfer timed out.')
         }
       }
     }
@@ -456,16 +461,25 @@ class FiveBellsLedger extends EventEmitter2 {
             : undefined
         })
 
-        if (fiveBellsTransfer.state === 'executed' &&
-            relatedResources && relatedResources.execution_condition_fulfillment) {
-          yield this.emitAsync('fulfill_execution_condition', transfer,
+        if (fiveBellsTransfer.state === 'prepared') {
+          yield this.emitAsync('outgoing_prepare', transfer)
+        }
+        if (fiveBellsTransfer.state === 'executed' && !transfer.executionCondition) {
+          yield this.emitAsync('outgoing_transfer', transfer)
+        }
+
+        if (fiveBellsTransfer.state === 'executed' && relatedResources &&
+            relatedResources.execution_condition_fulfillment) {
+          yield this.emitAsync('outgoing_fulfill', transfer,
             relatedResources.execution_condition_fulfillment)
         }
 
-        if (fiveBellsTransfer.state === 'rejected' &&
-            relatedResources && relatedResources.cancellation_condition_fulfillment) {
-          yield this.emitAsync('fulfill_cancellation_condition', transfer,
+        if (fiveBellsTransfer.state === 'rejected' && relatedResources &&
+            relatedResources.cancellation_condition_fulfillment) {
+          yield this.emitAsync('outgoing_cancel', transfer,
             relatedResources.cancellation_condition_fulfillment)
+        } else if (fiveBellsTransfer.state === 'rejected') {
+          yield this.emitAsync('outgoing_cancel', transfer, 'transfer timed out.')
         }
       }
     }
