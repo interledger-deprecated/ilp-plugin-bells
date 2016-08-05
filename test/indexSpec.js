@@ -1,12 +1,17 @@
 'use strict'
 
-const assert = require('chai').assert
+const chai = require('chai')
+const chaiAsPromised = require('chai-as-promised')
+chai.use(chaiAsPromised)
+chai.should()
+
+const assert = chai.assert
+
 const expect = require('chai').expect
 const mock = require('mock-require')
 const nock = require('nock')
 const sinon = require('sinon')
 const wsHelper = require('./helpers/ws')
-const ExternalError = require('../src/errors/external-error')
 const cloneDeep = require('lodash/cloneDeep')
 
 mock('ws', wsHelper.WebSocket)
@@ -100,18 +105,17 @@ describe('PluginBells', function () {
         nockInfo.done()
       })
 
-      it('fails if the response is invalid', function * () {
+      it('fails if the response is invalid', function (done) {
         nock('http://red.example')
           .get('/accounts/mike')
           .reply(200, { name: 'mike' })
 
-        try {
-          yield this.plugin.connect()
-          assert(false)
-        } catch (err) {
-          assert.isFalse(this.plugin.isConnected())
-          assert.equal(err.message, 'Failed to resolve ledger URI from account URI')
-        }
+        this.plugin.connect().should.be
+          .rejectedWith('Failed to resolve ledger URI from account URI')
+          .notify(() => {
+            assert.isFalse(this.plugin.isConnected())
+            done()
+          })
       })
 
       it('retries if ledger accounts not available', function * () {
@@ -163,31 +167,24 @@ describe('PluginBells', function () {
           nockInfo.done()
         })
 
-        it('throws an ExternalError if unable to set the connector field', function * () {
+        it('throws an ExternalError if unable to set the connector field', function (done) {
           nock('http://red.example')
             .get('/accounts/mike')
             .reply(200, { ledger: 'http://red.example', name: 'mike' })
             .put('/accounts/mike', { name: 'mike', connector: 'http://mark.example' })
             .reply(500)
-          try {
-            yield this.plugin.connect()
-            assert(false)
-          } catch (err) {
-            assert(err instanceof ExternalError)
-            assert.equal(err.message, 'Remote error: status=500')
-          }
+          this.plugin.connect().should.be
+            .rejectedWith('Remote error: status=500')
+            .notify(done)
         })
       })
     })
 
     describe('getConnectors (not connected)', function () {
-      it('fails when not connected', function * () {
-        try {
-          yield assertResolve(this.plugin.getConnectors(), undefined)
-          assert(false)
-        } catch (err) {
-          assert.equal(err.message, 'Must be connected before getConnectors can be called')
-        }
+      it('fails when not connected', function (done) {
+        this.plugin.getConnectors().should.be
+          .rejectedWith('Must be connected before getConnectors can be called')
+          .notify(done)
       })
     })
 
@@ -564,30 +561,22 @@ describe('PluginBells', function () {
         })
       })
 
-      it('throws an ExternalError on 500', function * () {
+      it('throws an ExternalError on 500', function (done) {
         nock('http://red.example')
           .get('/')
           .reply(500)
-        try {
-          yield this.plugin.getInfo()
-          assert(false)
-        } catch (err) {
-          assert(err instanceof ExternalError)
-          assert.equal(err.message, 'Unable to determine ledger precision')
-        }
+        this.plugin.getInfo().should.be
+          .rejectedWith('Unable to determine ledger precision')
+          .notify(done)
       })
 
-      it('throws an ExternalError when the precision is missing', function * () {
+      it('throws an ExternalError when the precision is missing', function (done) {
         nock('http://red.example')
           .get('/')
           .reply(200, {scale: 4})
-        try {
-          yield this.plugin.getInfo()
-          assert(false)
-        } catch (err) {
-          assert(err instanceof ExternalError)
-          assert.equal(err.message, 'Unable to determine ledger precision')
-        }
+        this.plugin.getInfo().should.be
+          .rejectedWith('Unable to determine ledger precision')
+          .notify(done)
       })
     })
 
@@ -595,11 +584,136 @@ describe('PluginBells', function () {
       it('returns the plugin\'s prefix', function * () {
         yield assertResolve(this.plugin.getPrefix(), 'example.red.')
       })
+
+      it('fails without any prefix', function (done) {
+        const plugin = new PluginBells({
+          // no prefix
+          account: 'http://red.example/accounts/mike',
+          password: 'mike'
+        })
+        plugin.getPrefix().should.be
+          .rejectedWith('Prefix has not been set')
+          .notify(done)
+      })
+
+      it('cannot connect without any prefix', function (done) {
+        const plugin = new PluginBells({
+          account: 'http://blue.example/accounts/mike',
+          password: 'mike',
+          debugReplyNotifications: true,
+          debugAutofund: {
+            connector: 'http://mark.example',
+            admin: {username: 'adminuser', password: 'adminpass'}
+          }
+        })
+
+        const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
+        const nockInfo = nock('http://blue.example')
+          .get('/')
+          .reply(200, infoRedLedger)
+
+        const nockAccount = nock('http://blue.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://blue.example',
+            name: 'mike'
+          })
+
+        plugin.connect().should.be
+          .rejectedWith('Unable to set prefix from ledger or from local config')
+          .notify(() => {
+            nockInfo.done()
+            nockAccount.done()
+            done()
+          })
+      })
+
+      it('should use local if ledger and local prefix don\'t match', function (done) {
+        const plugin = new PluginBells({
+          prefix: 'example.red.',
+          account: 'http://blue.example/accounts/mike',
+          password: 'mike',
+          debugReplyNotifications: true,
+          debugAutofund: {
+            connector: 'http://mark.example',
+            admin: {username: 'adminuser', password: 'adminpass'}
+          }
+        })
+
+        const infoRedLedger = Object.assign(
+          cloneDeep(require('./data/infoRedLedger.json')),
+          { ilp_prefix: 'example.blue.' }
+        )
+        const nockInfo = nock('http://blue.example')
+          .get('/')
+          .reply(200, infoRedLedger)
+
+        const nockAccount = nock('http://blue.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://blue.example',
+            name: 'mike'
+          })
+
+        plugin.connect().then(() => {
+          assert.equal(plugin.prefix, 'example.red.')
+          nockInfo.done()
+          nockAccount.done()
+          done()
+        })
+      })
+
+      it('gets the ledger\'s prefix when available', function * () {
+        const plugin = new PluginBells({
+          // no prefix
+          account: 'http://blue.example/accounts/mike',
+          password: 'mike',
+          debugReplyNotifications: true,
+          debugAutofund: {
+            connector: 'http://mark.example',
+            admin: {username: 'adminuser', password: 'adminpass'}
+          }
+        })
+
+        const infoRedLedger = Object.assign(
+          cloneDeep(require('./data/infoRedLedger.json')),
+          { ilp_prefix: 'example.blue.' }
+        )
+        const nockInfo = nock('http://blue.example')
+          .get('/')
+          .reply(200, infoRedLedger)
+
+        const nockAccount = nock('http://blue.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://blue.example',
+            name: 'mike'
+          })
+
+        this.wsRedLedger = new wsHelper.Server('ws://blue.example/accounts/mike/transfers')
+
+        yield plugin.connect()
+        yield assertResolve(plugin.getPrefix(), 'example.blue.')
+        yield plugin.disconnect()
+        nockInfo.done()
+        nockAccount.done()
+      })
     })
 
     describe('getAccount', function () {
       it('returns the plugin\'s account', function * () {
         yield assertResolve(this.plugin.getAccount(), 'example.red.mike')
+      })
+
+      it('fails without any prefix', function (done) {
+        const plugin = new PluginBells({
+          // no prefix
+          account: 'http://red.example/accounts/mike',
+          password: 'mike'
+        })
+        plugin.getAccount().should.be
+          .rejectedWith('Must be connected before getAccount can be called')
+          .notify(done)
       })
     })
 
@@ -611,17 +725,13 @@ describe('PluginBells', function () {
         yield assertResolve(this.plugin.getBalance(), '100')
       })
 
-      it('throws an ExternalError on 500', function * () {
+      it('throws an ExternalError on 500', function (done) {
         nock('http://red.example')
           .get('/accounts/mike')
           .reply(500)
-        try {
-          yield this.plugin.getBalance()
-          assert(false)
-        } catch (err) {
-          assert(err instanceof ExternalError)
-          assert.equal(err.message, 'Unable to determine current balance')
-        }
+        this.plugin.getBalance().should.be
+          .rejectedWith('Unable to determine current balance')
+          .notify(done)
       })
     })
 
@@ -633,17 +743,13 @@ describe('PluginBells', function () {
         yield assertResolve(this.plugin.getConnectors(), ['one', 'two'])
       })
 
-      it('throws an ExternalError on 500', function * () {
+      it('throws an ExternalError on 500', function (done) {
         nock('http://red.example')
           .get('/connectors')
           .reply(500)
-        try {
-          yield this.plugin.getConnectors()
-          assert(false)
-        } catch (err) {
-          assert(err instanceof ExternalError)
-          assert.equal(err.message, 'Unexpected status code: 500')
-        }
+        this.plugin.getConnectors().should.be
+          .rejectedWith('Unexpected status code: 500')
+          .notify(done)
       })
 
       it('should retry when getting connectors', function * () {
@@ -712,10 +818,7 @@ describe('PluginBells', function () {
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
           account: 'red.alice',
           amount: '123'
-        }).catch((err) => {
-          assert.equal(err.message, 'Remote error: status=400')
-          done()
-        })
+        }).should.be.rejectedWith('Remote error: status=400').notify(done)
       })
 
       it('sets up case notifications when "cases" is provided', function * () {
@@ -757,10 +860,7 @@ describe('PluginBells', function () {
           account: 'red.alice',
           amount: '123',
           cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
-        }).catch((err) => {
-          assert.equal(err.message, 'Unexpected status code: 400')
-          done()
-        })
+        }).should.be.rejectedWith('Unexpected status code: 400').notify(done)
       })
     })
 
@@ -770,12 +870,10 @@ describe('PluginBells', function () {
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'garbage')
           .reply(203)
         this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'garbage')
-          .catch((err) => {
-            assert.equal(err.message, 'Failed to submit fulfillment for' +
-              ' transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c' +
-              ' Error: undefined')
-            done()
-          })
+          .should.be.rejectedWith('Failed to submit fulfillment for' +
+            ' transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c' +
+            ' Error: undefined')
+          .notify(done)
       })
 
       it('puts the fulfillment', function * () {
@@ -787,16 +885,13 @@ describe('PluginBells', function () {
           'cf:0:ZXhlY3V0ZQ'), null)
       })
 
-      it('throws an ExternalError on 500', function * () {
+      it('throws an ExternalError on 500', function (done) {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
           .reply(500)
-        try {
-          yield this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
-        } catch (err) {
-          assert(err instanceof ExternalError)
-          assert.equal(err.message, 'Remote error: status=500')
-        }
+        this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
+          .should.be.rejectedWith('Remote error: status=500')
+          .notify(done)
       })
     })
   })
