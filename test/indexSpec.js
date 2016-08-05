@@ -22,11 +22,9 @@ describe('PluginBells', function () {
   describe('constructor', function () {
     it('should succeed with valid configuration', function () {
       const plugin = new PluginBells({
-        auth: {
-          prefix: 'foo.',
-          account: 'http://red.example/accounts/mike',
-          password: 'mike'
-        }
+        prefix: 'foo.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike'
       })
 
       assert.instanceOf(plugin, PluginBells)
@@ -41,40 +39,28 @@ describe('PluginBells', function () {
     it('should throw when options.prefix is missing', function () {
       assert.throws(() => {
         return new PluginBells({
-          auth: {prefix: 5} // prefix is wrong type
+          prefix: 5 // prefix is wrong type
         })
-      }, 'Expected options.auth.prefix to be a string, received: number')
+      }, 'Expected options.prefix to be a string, received: number')
     })
 
     it('should throw when options.prefix is an invalid prefix', function () {
       assert.throws(() => {
         return new PluginBells({
-          auth: {
-            prefix: 'foo', // no trailing "."
-            account: 'http://red.example/accounts/mike',
-            password: 'mike'
-          }
+          prefix: 'foo', // no trailing "."
+          account: 'http://red.example/accounts/mike',
+          password: 'mike'
         })
-      }, 'Expected options.auth.prefix to end with "."')
-    })
-
-    it('should throw when auth information is missing', function () {
-      assert.throws(() => {
-        return new PluginBells({
-          // no auth
-        })
-      }, 'Expected options.auth to be an object, received: undefined')
+      }, 'Expected options.prefix to end with "."')
     })
   })
 
   describe('instance', function () {
     beforeEach(function * () {
       this.plugin = new PluginBells({
-        auth: {
-          prefix: 'example.red.',
-          account: 'http://red.example/accounts/mike',
-          password: 'mike'
-        }
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike'
       })
 
       this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
@@ -155,11 +141,9 @@ describe('PluginBells', function () {
         beforeEach(function () {
           this.plugin = new PluginBells({
             connector: 'http://mark.example',
-            auth: {
-              prefix: 'example.red.',
-              account: 'http://red.example/accounts/mike',
-              password: 'mike'
-            }
+            prefix: 'example.red.',
+            account: 'http://red.example/accounts/mike',
+            password: 'mike'
           })
         })
 
@@ -211,11 +195,9 @@ describe('PluginBells', function () {
   describe('connected instance', function () {
     beforeEach(function * () {
       this.plugin = new PluginBells({
-        auth: {
-          prefix: 'example.red.',
-          account: 'http://red.example/accounts/mike',
-          password: 'mike'
-        },
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike',
         debugReplyNotifications: true,
         debugAutofund: {
           connector: 'http://mark.example',
