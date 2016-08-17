@@ -1,5 +1,6 @@
 'use strict'
 
+const parseURL = require('url').parse
 const co = require('co')
 const request = require('co-request')
 const WebSocket = require('ws')
@@ -253,7 +254,10 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   getAccount () {
-    return this.prefix + this.credentials.username
+    if (!this.connected) {
+      return Promise.reject(new Error('Must be connected before getAccount can be called'))
+    }
+    return Promise.resolve(this.prefix + this.credentials.username)
   }
 
   _validateTransfer (transfer) {
@@ -402,7 +406,7 @@ class FiveBellsLedger extends EventEmitter2 {
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'incoming',
           // TODO: What if there are multiple debits?
-          account: fiveBellsTransfer.debits[0].account,
+          account: this.prefix + this.accountUriToName(fiveBellsTransfer.debits[0].account),
           ledger: this.prefix,
           amount: credit.amount,
           data: credit.memo,
@@ -448,7 +452,7 @@ class FiveBellsLedger extends EventEmitter2 {
         const transfer = omitUndefined({
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'outgoing',
-          account: credit.account,
+          account: this.prefix + this.accountUriToName(credit.account),
           ledger: this.prefix,
           amount: debit.amount,
           data: credit.memo,
@@ -514,6 +518,18 @@ class FiveBellsLedger extends EventEmitter2 {
 
   accountNameToUri (name) {
     return this.accountUriTemplate.replace(':name', name)
+  }
+
+  /**
+   * Get the account name from "http://red.example/accounts/alice" (where
+   * accountUriTemplate is "http://red.example/accounts/:name").
+   */
+  accountUriToName (accountURI) {
+    const templatePath = parseURL(this.accountUriTemplate).path.split('/')
+    const accountPath = parseURL(accountURI).path.split('/')
+    for (let i = 0; i < templatePath.length; i++) {
+      if (templatePath[i] === ':name') return accountPath[i]
+    }
   }
 }
 
