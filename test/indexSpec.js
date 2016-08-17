@@ -180,7 +180,7 @@ describe('PluginBells', function () {
       })
     })
 
-    describe('getConnectors (not connectored)', function () {
+    describe('getConnectors (not connected)', function () {
       it('fails when not connected', function * () {
         try {
           yield assertResolve(this.plugin.getConnectors(), undefined)
@@ -188,6 +188,15 @@ describe('PluginBells', function () {
         } catch (err) {
           assert.equal(err.message, 'Must be connected before getConnectors can be called')
         }
+      })
+    })
+
+    describe('getAccount (not connected)', function () {
+      it('throws if not connected', function (done) {
+        this.plugin.getAccount().catch(function (err) {
+          assert.equal(err.message, 'Must be connected before getAccount can be called')
+          done()
+        })
       })
     })
   })
@@ -345,7 +354,7 @@ describe('PluginBells', function () {
         this.transfer = {
           id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
           direction: 'incoming',
-          account: 'http://red.example/accounts/alice',
+          account: 'example.red.alice',
           amount: '10',
           expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
         }
@@ -413,7 +422,7 @@ describe('PluginBells', function () {
         this.transfer = {
           id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
           direction: 'incoming',
-          account: 'http://red.example/accounts/alice',
+          account: 'example.red.alice',
           ledger: 'example.red.',
           amount: '10'
         }
@@ -493,7 +502,7 @@ describe('PluginBells', function () {
         this.transfer = {
           id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
           direction: 'outgoing',
-          account: 'http://red.example/accounts/alice',
+          account: 'example.red.alice',
           ledger: 'example.red.',
           amount: '10'
         }
@@ -589,8 +598,8 @@ describe('PluginBells', function () {
     })
 
     describe('getAccount', function () {
-      it('returns the plugin\'s account', function () {
-        assert.equal(this.plugin.getAccount(), 'example.red.mike')
+      it('returns the plugin\'s account', function * () {
+        yield assertResolve(this.plugin.getAccount(), 'example.red.mike')
       })
     })
 
