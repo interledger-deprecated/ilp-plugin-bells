@@ -59,16 +59,16 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new TypeError('Expected an options object, received: ' + typeof options)
     }
 
-    if (typeof options.prefix !== 'string') {
+    if (options.prefix && typeof options.prefix !== 'string') {
       throw new TypeError('Expected options.prefix to be a string, received: ' +
         typeof options.prefix)
     }
 
-    if (options.prefix.slice(-1) !== '.') {
+    if (typeof options.prefix === 'string' && options.prefix.slice(-1) !== '.') {
       throw new Error('Expected options.prefix to end with "."')
     }
 
-    this.prefix = options.prefix
+    this.configPrefix = options.prefix
     this.host = options.host || null
     this.credentials = {
       account: options.account,
@@ -128,6 +128,18 @@ class FiveBellsLedger extends EventEmitter2 {
     // Resolve ledger metadata
     const ledgerMetadata = yield this._fetchLedgerMetadata()
     this.accountUriTemplate = ledgerMetadata.urls.account
+
+    // Set ILP prefix
+    const ledgerPrefix = ledgerMetadata.ilp_prefix
+    this.prefix = this.configPrefix || ledgerMetadata.ilp_prefix
+
+    if (ledgerPrefix && this.configPrefix && ledgerPrefix !== this.configPrefix) {
+      console.warn('ilp-plugin-bells: ledger prefix (' + ledgerPrefix +
+        ') does not match locally configured prefix (' + this.configPrefix + ')')
+    }
+    if (!this.prefix) {
+      throw new Error('Unable to set prefix from ledger or from local config')
+    }
 
     const streamUri = accountUri.replace('http', 'ws') + '/transfers'
     debug('subscribing to ' + streamUri)
@@ -250,6 +262,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   getPrefix () {
+    if (!this.prefix) {
+      return Promise.reject(new Error('Prefix has not been set'))
+    }
     return Promise.resolve(this.prefix)
   }
 
