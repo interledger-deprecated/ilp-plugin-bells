@@ -12,6 +12,7 @@ const mock = require('mock-require')
 const nock = require('nock')
 const sinon = require('sinon')
 const wsHelper = require('./helpers/ws')
+const ExternalError = require('../src/errors/external-error')
 const cloneDeep = require('lodash/cloneDeep')
 
 mock('ws', wsHelper.WebSocket)
@@ -721,6 +722,7 @@ describe('PluginBells', function () {
       it('returns the current balance', function * () {
         nock('http://red.example')
           .get('/accounts/mike')
+          .basicAuth({user: 'mike', pass: 'mike'})
           .reply(200, {balance: '100'})
         yield assertResolve(this.plugin.getBalance(), '100')
       })
@@ -728,6 +730,7 @@ describe('PluginBells', function () {
       it('throws an ExternalError on 500', function (done) {
         nock('http://red.example')
           .get('/accounts/mike')
+          .basicAuth({user: 'mike', pass: 'mike'})
           .reply(500)
         this.plugin.getBalance().should.be
           .rejectedWith('Unable to determine current balance')
@@ -787,6 +790,7 @@ describe('PluginBells', function () {
               memo: {foo: 'bar'}
             }]
           })
+          .basicAuth({user: 'mike', pass: 'mike'})
           .reply(200)
         yield assertResolve(this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -822,6 +826,7 @@ describe('PluginBells', function () {
               amount: '123'
             }]
           })
+          .basicAuth({user: 'mike', pass: 'mike'})
           .reply(400, {id: 'SomeError'})
 
         this.plugin.send({
@@ -850,6 +855,7 @@ describe('PluginBells', function () {
             }],
             additional_info: {cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']}
           })
+          .basicAuth({user: 'mike', pass: 'mike'})
           .reply(200)
 
         yield this.plugin.send({
@@ -878,6 +884,7 @@ describe('PluginBells', function () {
       it('errors on improper fulfillment', function (done) {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'garbage')
+          .basicAuth({user: 'mike', pass: 'mike'})
           .reply(203)
         this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'garbage')
           .should.be.rejectedWith('Failed to submit fulfillment for' +
@@ -889,6 +896,7 @@ describe('PluginBells', function () {
       it('puts the fulfillment', function * () {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
+          .basicAuth({user: 'mike', pass: 'mike'})
           .reply(201)
         yield assertResolve(this.plugin.fulfillCondition(
           '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -898,10 +906,63 @@ describe('PluginBells', function () {
       it('throws an ExternalError on 500', function (done) {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
+          .basicAuth({user: 'mike', pass: 'mike'})
           .reply(500)
         this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
           .should.be.rejectedWith('Remote error: status=500')
           .notify(done)
+      })
+    })
+
+    describe('getFulfillment', function () {
+      it('returns the fulfillment', function * () {
+        nock('http://red.example')
+          .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(200, 'cf:0:ZXhlY3V0ZQ')
+        yield assertResolve(
+          this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
+          'cf:0:ZXhlY3V0ZQ')
+      })
+
+      it('returns null on 404', function * () {
+        nock('http://red.example')
+          .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(404)
+        yield assertResolve(
+          this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
+          null)
+      })
+
+      it('throws an ExternalError on 500', function * () {
+        nock('http://red.example')
+          .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(500)
+        try {
+          yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
+        } catch (err) {
+          assert(err instanceof ExternalError)
+          assert.equal(err.message, 'Remote error: status=500')
+          return
+        }
+        assert(false)
+      })
+
+      it('throws an ExternalError on error', function * () {
+        nock('http://red.example')
+          .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .replyWithError('broken')
+        try {
+          yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
+        } catch (err) {
+          assert(err instanceof ExternalError)
+          assert.equal(err.message, 'Remote error: message=broken')
+          return
+        }
+        assert(false)
       })
     })
   })

@@ -13,7 +13,6 @@ const isUndefined = require('lodash/fp/isUndefined')
 const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
 const startsWith = require('lodash/fp/startsWith')
 const map = require('lodash/map')
-const defaults = require('lodash/defaults')
 
 const backoffMin = 1000
 const backoffMax = 30000
@@ -29,16 +28,10 @@ function * requestRetry (opts, errorMessage, credentials) {
   while (true) {
     debug('connecting to account ' + opts.uri)
     try {
-      let res = yield request(defaults(opts, omitUndefined({
-        auth: credentials.password && credentials.username && {
-          user: credentials.username,
-          pass: credentials.password
-        },
-        cert: credentials.cert,
-        key: credentials.key,
-        ca: credentials.ca,
-        json: true
-      })))
+      let res = yield request(Object.assign(
+        {json: true},
+        requestCredentials(credentials),
+        opts))
       if (res.statusCode >= 400 && res.statusCode < 500) {
         debug('request status ' + res.statusCode + ' retrying connection')
         throw new Error(errorMessage)
@@ -288,18 +281,11 @@ class FiveBellsLedger extends EventEmitter2 {
     const creds = this.credentials
     let res
     try {
-      res = yield request({
+      res = yield request(Object.assign({
         method: 'get',
         uri: creds.account,
-        auth: creds.password && {
-          user: creds.username,
-          pass: creds.password
-        },
-        ca: creds.ca,
-        cert: creds.cert,
-        key: creds.key,
         json: true
-      })
+      }, requestCredentials(creds)))
     } catch (e) { }
     if (!res || res.statusCode !== 200) {
       throw new ExternalError('Unable to determine current balance')
@@ -382,14 +368,14 @@ class FiveBellsLedger extends EventEmitter2 {
     return null
   }
 
-  fulfillCondition (transferID, conditionFulfillment) {
-    return co.wrap(this._fulfillCondition).call(this, transferID, conditionFulfillment)
+  fulfillCondition (transferId, conditionFulfillment) {
+    return co.wrap(this._fulfillCondition).call(this, transferId, conditionFulfillment)
   }
 
-  * _fulfillCondition (transferID, conditionFulfillment) {
+  * _fulfillCondition (transferId, conditionFulfillment) {
     const fulfillmentRes = yield this._request({
       method: 'put',
-      uri: this.host + '/transfers/' + transferID + '/fulfillment',
+      uri: this.host + '/transfers/' + transferId + '/fulfillment',
       body: conditionFulfillment,
       json: false
     })
@@ -398,16 +384,32 @@ class FiveBellsLedger extends EventEmitter2 {
     if (fulfillmentRes.statusCode === 200 || fulfillmentRes.statusCode === 201) {
       return null
     } else {
-      throw new Error('Failed to submit fulfillment for transfer: ' + transferID + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
+      throw new Error('Failed to submit fulfillment for transfer: ' + transferId + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
     }
   }
 
-  * _getTransferFulfillment (transfer) {
-    const fulfillmentRes = yield this._request({
-      method: 'get',
-      uri: transfer.id + '/fulfillment'
-    })
-    return fulfillmentRes.body
+  /**
+   * @param {String} transferId
+   * @returns {Promise<String|null>}
+   */
+  getFulfillment (transferId) {
+    return co.wrap(this._getFulfillment).call(this, transferId)
+  }
+
+  * _getFulfillment (transferId) {
+    let res
+    try {
+      res = yield request(Object.assign({
+        method: 'get',
+        uri: this.host + '/transfers/' + transferId + '/fulfillment',
+        json: true
+      }, requestCredentials(this.credentials)))
+    } catch (err) {
+      throw new ExternalError('Remote error: message=' + err.message)
+    }
+    if (res.statusCode === 404) return null
+    if (res.statusCode === 200) return res.body
+    throw new ExternalError('Remote error: status=' + (res && res.statusCode))
   }
 
   * _handleNotification (fiveBellsTransfer, relatedResources) {
@@ -511,17 +513,10 @@ class FiveBellsLedger extends EventEmitter2 {
   * _request (opts) {
     // TODO: check before this point that we actually have
     // credentials for the ledgers we're asked to settle between
-    const credentials = this.credentials
-    const transferRes = yield request(defaults(opts, omitUndefined({
-      auth: credentials.username && credentials.password && {
-        user: credentials.username,
-        pass: credentials.password
-      },
-      cert: credentials.cert,
-      key: credentials.key,
-      ca: credentials.ca,
-      json: true
-    })))
+    const transferRes = yield request(Object.assign(
+      {json: true},
+      requestCredentials(this.credentials),
+      opts))
     // TODO for source transfers: handle this so we actually get our money back
     if (transferRes.statusCode >= 400) {
       const error = new ExternalError('Remote error: status=' + transferRes.statusCode)
@@ -564,6 +559,18 @@ class FiveBellsLedger extends EventEmitter2 {
       additionalParts: addressParts.slice(1).join('.')
     }
   }
+}
+
+function requestCredentials (credentials) {
+  return omitUndefined({
+    auth: credentials.username && credentials.password && {
+      user: credentials.username,
+      pass: credentials.password
+    },
+    cert: credentials.cert,
+    key: credentials.key,
+    ca: credentials.ca
+  })
 }
 
 module.exports = FiveBellsLedger
