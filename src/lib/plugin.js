@@ -11,6 +11,7 @@ const UnrelatedNotificationError = require('../errors/unrelated-notification-err
 const EventEmitter2 = require('eventemitter2').EventEmitter2
 const isUndefined = require('lodash/fp/isUndefined')
 const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
+const startsWith = require('lodash/fp/startsWith')
 const map = require('lodash/map')
 const defaults = require('lodash/defaults')
 
@@ -331,7 +332,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _send (transfer) {
-    const sourceAddress = parseAddress(transfer.account)
+    const sourceAddress = yield this.parseAddress(transfer.account)
     const fiveBellsTransfer = omitUndefined({
       id: this.host + '/transfers/' + transfer.id,
       ledger: this.host,
@@ -546,13 +547,22 @@ class FiveBellsLedger extends EventEmitter2 {
       if (templatePath[i] === ':name') return accountPath[i]
     }
   }
-}
 
-function parseAddress (address) {
-  const addressParts = address.split('.')
-  return {
-    ledger: addressParts.slice(0, -1).join('.'),
-    username: addressParts[addressParts.length - 1]
+  * parseAddress (address) {
+    const prefix = yield this.getPrefix()
+
+    if (!startsWith(prefix, address)) {
+      debug('destination address has invalid prefix', { prefix, address })
+      throw new Error('Destination address "' + address + '" must start ' +
+        'with ledger prefix "' + prefix + '"')
+    }
+
+    const addressParts = address.substr(this.prefix.length).split('.')
+    return {
+      ledger: prefix,
+      username: addressParts.slice(0, 1).join('.'),
+      additionalParts: addressParts.slice(1).join('.')
+    }
   }
 }
 
