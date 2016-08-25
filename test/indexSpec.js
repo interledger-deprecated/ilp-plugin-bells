@@ -790,7 +790,7 @@ describe('PluginBells', function () {
           .reply(200)
         yield assertResolve(this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-          account: 'red.alice',
+          account: 'example.red.alice',
           amount: '123',
           noteToSelf: {source: 'something'},
           data: {foo: 'bar'}
@@ -816,7 +816,7 @@ describe('PluginBells', function () {
 
         this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-          account: 'red.alice',
+          account: 'example.red.alice',
           amount: '123'
         }).should.be.rejectedWith('Remote error: status=400').notify(done)
       })
@@ -844,7 +844,7 @@ describe('PluginBells', function () {
 
         yield this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-          account: 'red.alice',
+          account: 'example.red.alice',
           amount: '123',
           cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
         })
@@ -857,7 +857,7 @@ describe('PluginBells', function () {
 
         this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-          account: 'red.alice',
+          account: 'example.red.alice',
           amount: '123',
           cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
         }).should.be.rejectedWith('Unexpected status code: 400').notify(done)
