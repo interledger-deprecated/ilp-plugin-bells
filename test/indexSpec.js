@@ -18,7 +18,7 @@ mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
 
 describe('PluginBells', function () {
-  afterEach(function () { assert(nock.isDone()) })
+  afterEach(function () { assert(nock.isDone(), 'nock was not called') })
 
   it('should be a class', function () {
     assert.isFunction(PluginBells)
@@ -795,6 +795,16 @@ describe('PluginBells', function () {
           noteToSelf: {source: 'something'},
           data: {foo: 'bar'}
         }), null)
+      })
+
+      it('rejects a transfer when the destination does not begin with the correct prefix', function * () {
+        yield assert.isRejected(this.plugin.send({
+          id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          account: 'red.alice',
+          amount: '123',
+          noteToSelf: {source: 'something'},
+          data: {foo: 'bar'}
+        }), /^Error: Destination address "red.alice" must start with ledger prefix "example.red."$/)
       })
 
       it('throws an ExternalError on 400', function (done) {

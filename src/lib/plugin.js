@@ -553,7 +553,8 @@ class FiveBellsLedger extends EventEmitter2 {
 
     if (!startsWith(prefix, address)) {
       debug('destination address has invalid prefix', { prefix, address })
-      throw new Error('Destination address must start with ledger prefix')
+      throw new Error('Destination address "' + address + '" must start ' +
+        'with ledger prefix "' + prefix + '"')
     }
 
     const addressParts = address.substr(this.prefix.length).split('.')
