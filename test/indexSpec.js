@@ -12,7 +12,6 @@ const mock = require('mock-require')
 const nock = require('nock')
 const sinon = require('sinon')
 const wsHelper = require('./helpers/ws')
-const ExternalError = require('../src/errors/external-error')
 const cloneDeep = require('lodash/cloneDeep')
 
 mock('ws', wsHelper.WebSocket)
@@ -925,14 +924,38 @@ describe('PluginBells', function () {
           'cf:0:ZXhlY3V0ZQ')
       })
 
-      it('returns null on 404', function * () {
+      it('throws on TransferNotFoundError', function * () {
         nock('http://red.example')
           .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
           .basicAuth({user: 'mike', pass: 'mike'})
-          .reply(404)
-        yield assertResolve(
-          this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
-          null)
+          .reply(404, {
+            id: 'TransferNotFoundError',
+            message: 'This transfer does not exist'
+          })
+        try {
+          yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
+        } catch (err) {
+          assert.equal(err.name, 'TransferNotFoundError')
+          return
+        }
+        assert(false)
+      })
+
+      it('throws on FulfillmentNotFoundError', function * () {
+        nock('http://red.example')
+          .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(404, {
+            id: 'FulfillmentNotFoundError',
+            message: 'This transfer has no fulfillment'
+          })
+        try {
+          yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
+        } catch (err) {
+          assert.equal(err.name, 'FulfillmentNotFoundError')
+          return
+        }
+        assert(false)
       })
 
       it('throws an ExternalError on 500', function * () {
@@ -943,7 +966,7 @@ describe('PluginBells', function () {
         try {
           yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
         } catch (err) {
-          assert(err instanceof ExternalError)
+          assert.equal(err.name, 'ExternalError')
           assert.equal(err.message, 'Remote error: status=500')
           return
         }
@@ -958,7 +981,7 @@ describe('PluginBells', function () {
         try {
           yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
         } catch (err) {
-          assert(err instanceof ExternalError)
+          assert.equal(err.name, 'ExternalError')
           assert.equal(err.message, 'Remote error: message=broken')
           return
         }
