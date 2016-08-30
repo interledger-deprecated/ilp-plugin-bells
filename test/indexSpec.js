@@ -141,6 +141,44 @@ describe('PluginBells', function () {
         nockInfo.done()
       })
 
+      it('should set the username based on the account name returned', function * () {
+        const accountNock = nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+        const infoNock = nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+        yield this.plugin.connect()
+        assert.equal(this.plugin.credentials.username, 'mike')
+        accountNock.done()
+        infoNock.done()
+      })
+
+      it('should not overwrite the username if one is specified in the options', function * () {
+        const accountNock = nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+        const infoNock = nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+        const plugin = new PluginBells({
+          prefix: 'foo.',
+          account: 'http://red.example/accounts/mike',
+          password: 'mike',
+          username: 'xavier'
+        })
+        yield plugin.connect()
+        assert.equal(plugin.credentials.username, 'xavier')
+        accountNock.done()
+        infoNock.done()
+      })
+
       describe('a connector', function () {
         beforeEach(function () {
           this.plugin = new PluginBells({
