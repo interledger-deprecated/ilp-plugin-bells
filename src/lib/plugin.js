@@ -68,6 +68,7 @@ class FiveBellsLedger extends EventEmitter2 {
     this.host = options.host || null
     this.credentials = {
       account: options.account,
+      username: options.username,
       password: options.password,
       cert: options.cert,
       key: options.key,
@@ -104,7 +105,10 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new Error('Failed to resolve ledger URI from account URI')
     }
     this.host = res.body.ledger
-    this.credentials.username = res.body.name
+    // Set the username but don't overwrite the username in case it was provided
+    if (!this.credentials.username) {
+      this.credentials.username = res.body.name
+    }
 
     if (!res.body.connector && this.connector) {
       const res2 = yield this._request({
