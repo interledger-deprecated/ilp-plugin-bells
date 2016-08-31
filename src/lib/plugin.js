@@ -426,6 +426,25 @@ class FiveBellsLedger extends EventEmitter2 {
     throw new ExternalError('Remote error: status=' + (res && res.statusCode))
   }
 
+  /**
+   * @param {String} transferId
+   * @param {String} rejectionMessage
+   * @returns {Promise<null>}
+   */
+  rejectIncomingTransfer (transferId, rejectionMessage) {
+    return co.wrap(this._rejectIncomingTransfer).call(this, transferId, rejectionMessage)
+  }
+
+  * _rejectIncomingTransfer (transferId, rejectionMessage) {
+    yield this._request({
+      method: 'put',
+      uri: this.host + '/transfers/' + transferId + '/rejection',
+      body: rejectionMessage,
+      json: false
+    })
+    return null
+  }
+
   * _handleNotification (fiveBellsTransfer, relatedResources) {
     this._validateTransfer(fiveBellsTransfer)
 
