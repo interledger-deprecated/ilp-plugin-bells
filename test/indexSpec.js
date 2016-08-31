@@ -988,6 +988,31 @@ describe('PluginBells', function () {
         assert(false)
       })
     })
+
+    describe('rejectIncomingTransfer', function () {
+      it('returns null on success', function * () {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+          .reply(200, {whatever: true})
+        yield assertResolve(
+          this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'),
+          null)
+      })
+
+      it('throws on error', function * () {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+          .reply(500)
+        try {
+          yield this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
+        } catch (err) {
+          assert.equal(err.name, 'ExternalError')
+          assert.equal(err.message, 'Remote error: status=500')
+          return
+        }
+        assert(false)
+      })
+    })
   })
 })
 
