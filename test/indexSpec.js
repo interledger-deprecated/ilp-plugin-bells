@@ -555,7 +555,7 @@ describe('PluginBells', function () {
             credits: [
               Object.assign(this.fiveBellsTransferExecuted.credits[0], {
                 rejected: true,
-                rejection_message: 'fail!'
+                rejection_message: new Buffer('fail!').toString('base64')
               })
             ]
           })
