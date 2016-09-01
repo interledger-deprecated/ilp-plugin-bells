@@ -548,6 +548,27 @@ describe('PluginBells', function () {
       it('should emit "fulfill_cancellation_condition" on outgoing rejected transfers',
         itEmitsFulfillCancellationCondition)
 
+      it('should emit outgoing_cancel with the rejection_message', function * () {
+        this.wsRedLedger.send(JSON.stringify({
+          resource: Object.assign(this.fiveBellsTransferExecuted, {
+            state: 'rejected',
+            credits: [
+              Object.assign(this.fiveBellsTransferExecuted.credits[0], {
+                rejected: true,
+                rejection_message: 'fail!'
+              })
+            ]
+          })
+        }))
+
+        yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
+
+        if (this.stubReceive) sinon.assert.notCalled(this.stubReceive)
+        sinon.assert.notCalled(this.stubFulfillExecutionCondition)
+        sinon.assert.calledOnce(this.stubFulfillCancellationCondition)
+        sinon.assert.calledWith(this.stubFulfillCancellationCondition, this.transfer, 'fail!')
+      })
+
       it('be notified of an outgoing prepare', function * () {
         this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
         this.fiveBellsTransferExecuted.state = 'prepared'

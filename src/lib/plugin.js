@@ -15,6 +15,7 @@ const isUndefined = require('lodash/fp/isUndefined')
 const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
 const startsWith = require('lodash/fp/startsWith')
 const map = require('lodash/map')
+const find = require('lodash/find')
 
 const backoffMin = 1000
 const backoffMax = 30000
@@ -534,7 +535,9 @@ class FiveBellsLedger extends EventEmitter2 {
           yield this.emitAsync('outgoing_cancel', transfer,
             relatedResources.cancellation_condition_fulfillment)
         } else if (fiveBellsTransfer.state === 'rejected') {
-          yield this.emitAsync('outgoing_cancel', transfer, 'transfer timed out.')
+          const rejectedCredit = find(fiveBellsTransfer.credits, 'rejected')
+          const rejectionMessage = rejectedCredit ? rejectedCredit.rejection_message : 'transfer timed out.'
+          yield this.emitAsync('outgoing_cancel', transfer, rejectionMessage)
         }
       }
     }
