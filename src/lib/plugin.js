@@ -273,7 +273,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.connected) {
       return Promise.reject(new Error('Must be connected before getAccount can be called'))
     }
-    return Promise.resolve(this.prefix + this.credentials.username)
+    return Promise.resolve(this.prefix + this.accountUriToName(this.credentials.account))
   }
 
   _validateTransfer (transfer) {
