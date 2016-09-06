@@ -536,7 +536,9 @@ class FiveBellsLedger extends EventEmitter2 {
             relatedResources.cancellation_condition_fulfillment)
         } else if (fiveBellsTransfer.state === 'rejected') {
           const rejectedCredit = find(fiveBellsTransfer.credits, 'rejected')
-          const rejectionMessage = rejectedCredit ? rejectedCredit.rejection_message : 'transfer timed out.'
+          const rejectionMessage = rejectedCredit
+            ? new Buffer(rejectedCredit.rejection_message, 'base64').toString()
+            : 'transfer timed out.'
           yield this.emitAsync('outgoing_cancel', transfer, rejectionMessage)
         }
       }
