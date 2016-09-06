@@ -179,6 +179,19 @@ describe('PluginBells', function () {
         infoNock.done()
       })
 
+      it('doesn\'t retry if account is nonexistant', function (done) {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(404)
+
+        this.plugin.connect().should.be
+          .rejectedWith('Failed to resolve ledger URI from account URI')
+          .notify(() => {
+            assert.isFalse(this.plugin.isConnected())
+            done()
+          })
+      })
+
       describe('a connector', function () {
         beforeEach(function () {
           this.plugin = new PluginBells({
