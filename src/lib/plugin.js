@@ -35,12 +35,9 @@ function * requestRetry (opts, errorMessage, credentials) {
         {json: true},
         requestCredentials(credentials),
         opts))
-      if (res.statusCode === 404) {
-        debug('request status 404.')
-        break // don't retry if it's a 404
-      } else if (res.statusCode >= 400 && res.statusCode < 500) {
+      if (res.statusCode >= 400 && res.statusCode < 500) {
         debug('request status ' + res.statusCode + ' retrying connection')
-        throw new Error(errorMessage)
+        break
       }
       return res
     } catch (err) {
