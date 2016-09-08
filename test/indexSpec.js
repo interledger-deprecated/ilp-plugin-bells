@@ -7,7 +7,6 @@ chai.should()
 
 const assert = chai.assert
 
-const expect = require('chai').expect
 const mock = require('mock-require')
 const nock = require('nock')
 const sinon = require('sinon')
@@ -215,14 +214,6 @@ describe('PluginBells', function () {
             .rejectedWith('Remote error: status=500')
             .notify(done)
         })
-      })
-    })
-
-    describe('getConnectors (not connected)', function () {
-      it('fails when not connected', function (done) {
-        this.plugin.getConnectors().should.be
-          .rejectedWith('Must be connected before getConnectors can be called')
-          .notify(done)
       })
     })
 
@@ -613,6 +604,11 @@ describe('PluginBells', function () {
           .get('/')
           .reply(200, this.infoRedLedger)
         yield assertResolve(this.plugin.getInfo(), {
+          connectors: [{
+            id: 'http://red.example/accounts/mark',
+            name: 'mark',
+            connector: 'http://connector.example'
+          }],
           currencyCode: 'USD',
           currencySymbol: '$',
           precision: 2,
@@ -793,40 +789,6 @@ describe('PluginBells', function () {
         this.plugin.getBalance().should.be
           .rejectedWith('Unable to determine current balance')
           .notify(done)
-      })
-    })
-
-    describe('getConnectors', function () {
-      it('returns a list of connectors', function * () {
-        nock('http://red.example')
-          .get('/connectors')
-          .reply(200, [{connector: 'one'}, {connector: 'two'}])
-        yield assertResolve(this.plugin.getConnectors(), ['one', 'two'])
-      })
-
-      it('throws an ExternalError on 500', function (done) {
-        nock('http://red.example')
-          .get('/connectors')
-          .reply(500)
-        this.plugin.getConnectors().should.be
-          .rejectedWith('Unexpected status code: 500')
-          .notify(done)
-      })
-
-      it('should retry when getting connectors', function * () {
-        this.timeout(10000)
-        nock('http://red.example')
-          .get('/connectors').times(2)
-          .replyWithError('Error')
-          .get('/connectors')
-          .reply(200, [{
-            id: 'http://red.example/accounts/bob',
-            name: 'bob',
-            connector: 'http://connector.example'
-          }])
-
-        const connectors = yield this.plugin.getConnectors()
-        expect(connectors).to.deep.equal(['http://connector.example'])
       })
     })
 

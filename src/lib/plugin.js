@@ -14,7 +14,6 @@ const EventEmitter2 = require('eventemitter2').EventEmitter2
 const isUndefined = require('lodash/fp/isUndefined')
 const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
 const startsWith = require('lodash/fp/startsWith')
-const map = require('lodash/map')
 const find = require('lodash/find')
 
 const backoffMin = 1000
@@ -233,6 +232,7 @@ class FiveBellsLedger extends EventEmitter2 {
     const ledgerMetadata = yield this._fetchLedgerMetadata()
 
     return {
+      connectors: ledgerMetadata.connectors,
       precision: ledgerMetadata.precision,
       scale: ledgerMetadata.scale,
       currencyCode: ledgerMetadata.currency_code,
@@ -298,26 +298,6 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new ExternalError('Unable to determine current balance')
     }
     return res.body.balance
-  }
-
-  getConnectors () {
-    return co.wrap(this._getConnectors).call(this)
-  }
-
-  * _getConnectors () {
-    if (!this.host) {
-      throw new Error('Must be connected before getConnectors can be called')
-    }
-
-    const res = yield requestRetry({
-      method: 'GET',
-      uri: this.host + '/connectors',
-      json: true
-    }, 'Unable to get connectors for ledger ' + this.host, {})
-    if (res.statusCode !== 200) {
-      throw new ExternalError('Unexpected status code: ' + res.statusCode)
-    }
-    return map(res.body, 'connector')
   }
 
   send (transfer) {
