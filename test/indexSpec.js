@@ -973,7 +973,7 @@ describe('PluginBells', function () {
         try {
           yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
         } catch (err) {
-          assert.equal(err.name, 'FulfillmentNotFoundError')
+          assert.equal(err.name, 'MissingFulfillmentError')
           return
         }
         assert(false)
