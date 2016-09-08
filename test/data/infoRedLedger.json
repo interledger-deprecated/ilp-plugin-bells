@@ -1,6 +1,13 @@
 {
   "scale": 4,
   "precision": 2,
+  "connectors": [
+    {
+      "id": "http://red.example/accounts/mark",
+      "name": "mark",
+      "connector": "http://connector.example"
+    }
+  ],
   "currency_code": "USD",
   "currency_symbol": "$",
   "urls": {
