@@ -117,29 +117,6 @@ describe('PluginBells', function () {
           })
       })
 
-      it('retries if ledger accounts not available', function * () {
-        const nockAccountError = nock('http://red.example')
-          .get('/accounts/mike')
-          .reply(400)
-
-        const nockAccountSuccess = nock('http://red.example')
-          .get('/accounts/mike')
-          .reply(200, {
-            ledger: 'http://red.example',
-            name: 'mike'
-          })
-
-        const nockInfo = nock('http://red.example')
-          .get('/')
-          .reply(200, this.infoRedLedger)
-
-        yield this.plugin.connect()
-
-        nockAccountError.done()
-        nockAccountSuccess.done()
-        nockInfo.done()
-      })
-
       it('should set the username based on the account name returned', function * () {
         const accountNock = nock('http://red.example')
           .get('/accounts/mike')
@@ -176,6 +153,19 @@ describe('PluginBells', function () {
         assert.equal(plugin.credentials.username, 'xavier')
         accountNock.done()
         infoNock.done()
+      })
+
+      it('doesn\'t retry if account is nonexistant', function (done) {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(404)
+
+        this.plugin.connect().should.be
+          .rejectedWith('Failed to resolve ledger URI from account URI')
+          .notify(() => {
+            assert.isFalse(this.plugin.isConnected())
+            done()
+          })
       })
 
       describe('a connector', function () {

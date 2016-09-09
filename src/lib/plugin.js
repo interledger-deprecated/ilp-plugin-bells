@@ -36,7 +36,7 @@ function * requestRetry (opts, errorMessage, credentials) {
         opts))
       if (res.statusCode >= 400 && res.statusCode < 500) {
         debug('request status ' + res.statusCode + ' retrying connection')
-        throw new Error(errorMessage)
+        break
       }
       return res
     } catch (err) {
@@ -45,6 +45,8 @@ function * requestRetry (opts, errorMessage, credentials) {
       yield wait(delay)
     }
   }
+  debug('http request failed. aborting.')
+  throw new Error(errorMessage)
 }
 
 class FiveBellsLedger extends EventEmitter2 {
