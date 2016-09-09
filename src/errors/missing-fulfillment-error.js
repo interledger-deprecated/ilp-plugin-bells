@@ -2,9 +2,9 @@
 
 const NotFoundError = require('five-bells-shared').NotFoundError
 
-class FulfillmentNotFoundError extends NotFoundError {
+class MissingFulfillmentError extends NotFoundError {
   * handler (ctx, log) {
-    log.warn('Fulfillment not found: ' + this.message)
+    log.warn('Missing fulfillment: ' + this.message)
     ctx.status = 404
     ctx.body = {
       id: this.name,
@@ -13,4 +13,4 @@ class FulfillmentNotFoundError extends NotFoundError {
   }
 }
 
-module.exports = FulfillmentNotFoundError
+module.exports = MissingFulfillmentError

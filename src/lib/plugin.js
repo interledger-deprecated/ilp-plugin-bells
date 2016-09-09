@@ -8,7 +8,7 @@ const reconnectCore = require('reconnect-core')
 const debug = require('debug')('ilp-plugin-bells:plugin')
 const ExternalError = require('../errors/external-error')
 const UnrelatedNotificationError = require('../errors/unrelated-notification-error')
-const FulfillmentNotFoundError = require('../errors/fulfillment-not-found-error')
+const MissingFulfillmentError = require('../errors/missing-fulfillment-error')
 const TransferNotFoundError = require('../errors/transfer-not-found-error')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
 const isUndefined = require('lodash/fp/isUndefined')
@@ -398,7 +398,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (res.statusCode === 200) return res.body
     if (res.statusCode === 404) {
       if (res.body.id === 'FulfillmentNotFoundError') {
-        throw new FulfillmentNotFoundError(res.body.message)
+        throw new MissingFulfillmentError(res.body.message)
       }
       if (res.body.id === 'TransferNotFoundError') {
         throw new TransferNotFoundError(res.body.message)
