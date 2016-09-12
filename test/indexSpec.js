@@ -593,7 +593,7 @@ describe('PluginBells', function () {
         nock('http://red.example')
           .get('/')
           .reply(200, this.infoRedLedger)
-        yield assertResolve(this.plugin.getInfo(), {
+        const info = {
           connectors: [{
             id: 'http://red.example/accounts/mark',
             name: 'mark',
@@ -603,7 +603,10 @@ describe('PluginBells', function () {
           currencySymbol: '$',
           precision: 2,
           scale: 4
-        })
+        }
+        yield assertResolve(this.plugin.getInfo(), info)
+        // The result is cached.
+        yield assertResolve(this.plugin.getInfo(), info)
       })
 
       it('throws an ExternalError on 500', function (done) {

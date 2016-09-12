@@ -80,6 +80,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
     this.debugReplyNotifications = options.debugReplyNotifications || false
 
+    this.info = null
     this.connection = null
     this.connected = false
   }
@@ -231,15 +232,17 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getInfo () {
+    if (this.info) return this.info
     const ledgerMetadata = yield this._fetchLedgerMetadata()
 
-    return {
+    this.info = {
       connectors: ledgerMetadata.connectors,
       precision: ledgerMetadata.precision,
       scale: ledgerMetadata.scale,
       currencyCode: ledgerMetadata.currency_code,
       currencySymbol: ledgerMetadata.currency_symbol
     }
+    return this.info
   }
 
   * _fetchLedgerMetadata () {
