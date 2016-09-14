@@ -497,10 +497,12 @@ describe('PluginBells', function () {
         this.stubFulfillCancellationCondition = sinon.stub()
         this.stubOutgoingPrepare = sinon.stub()
         this.stubOutgoingExecute = sinon.stub()
+        this.stubOutgoingReject = sinon.stub()
         this.plugin.on('outgoing_prepare', this.stubOutgoingPrepare)
         this.plugin.on('outgoing_transfer', this.stubOutgoingExecute)
         this.plugin.on('outgoing_fulfill', this.stubFulfillExecutionCondition)
         this.plugin.on('outgoing_cancel', this.stubFulfillCancellationCondition)
+        this.plugin.on('outgoing_reject', this.stubOutgoingReject)
 
         this.fiveBellsTransferExecuted = {
           id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
@@ -546,8 +548,9 @@ describe('PluginBells', function () {
 
         if (this.stubReceive) sinon.assert.notCalled(this.stubReceive)
         sinon.assert.notCalled(this.stubFulfillExecutionCondition)
-        sinon.assert.calledOnce(this.stubFulfillCancellationCondition)
-        sinon.assert.calledWith(this.stubFulfillCancellationCondition, this.transfer, 'fail!')
+        sinon.assert.notCalled(this.stubFulfillCancellationCondition)
+        sinon.assert.calledOnce(this.stubOutgoingReject)
+        sinon.assert.calledWith(this.stubOutgoingReject, this.transfer, 'fail!')
       })
 
       it('be notified of an outgoing prepare', function * () {
