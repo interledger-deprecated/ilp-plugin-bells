@@ -415,10 +415,12 @@ describe('PluginBells', function () {
       beforeEach(function () {
         this.stubPrepare = sinon.stub()
         this.stubExecute = sinon.stub()
+        this.stubReject = sinon.stub()
         this.stubFulfillExecutionCondition = sinon.stub()
         this.stubFulfillCancellationCondition = sinon.stub()
         this.plugin.on('incoming_prepare', this.stubPrepare)
         this.plugin.on('incoming_transfer', this.stubExecute)
+        this.plugin.on('incoming_reject', this.stubReject)
         this.plugin.on('incoming_fulfill', this.stubFulfillExecutionCondition)
         this.plugin.on('incoming_cancel', this.stubFulfillCancellationCondition)
 
@@ -444,10 +446,32 @@ describe('PluginBells', function () {
         }
       })
 
-      it('should emit "fulfill_execution_condition" on incoming executed transfers',
+      it('should emit "incoming_fulfill" on incoming executed transfers',
         itEmitsFulfillExecutionCondition)
-      it('should emit "fulfill_cancellation_condition" on incoming rejected transfers',
+      it('should emit "incoming_cancel" on incoming rejected transfers',
         itEmitsFulfillCancellationCondition)
+
+      it('should emit "incoming_reject" with the rejection_message', function * () {
+        this.wsRedLedger.send(JSON.stringify({
+          resource: Object.assign(this.fiveBellsTransferExecuted, {
+            state: 'rejected',
+            credits: [
+              Object.assign(this.fiveBellsTransferExecuted.credits[0], {
+                rejected: true,
+                rejection_message: new Buffer('fail!').toString('base64')
+              })
+            ]
+          })
+        }))
+
+        yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
+
+        if (this.stubPrepare) sinon.assert.notCalled(this.stubPrepare)
+        sinon.assert.notCalled(this.stubFulfillExecutionCondition)
+        sinon.assert.notCalled(this.stubFulfillCancellationCondition)
+        sinon.assert.calledOnce(this.stubReject)
+        sinon.assert.calledWith(this.stubReject, this.transfer, 'fail!')
+      })
 
       it('should pass on incoming prepared transfers', function * () {
         this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
@@ -526,9 +550,9 @@ describe('PluginBells', function () {
         }
       })
 
-      it('should emit "fulfill_execution_condition" on outgoing executed transfers',
+      it('should emit "outgoing_fulfill" on outgoing executed transfers',
         itEmitsFulfillExecutionCondition)
-      it('should emit "fulfill_cancellation_condition" on outgoing rejected transfers',
+      it('should emit "outgoing_cancel" on outgoing rejected transfers',
         itEmitsFulfillCancellationCondition)
 
       it('should emit outgoing_cancel with the rejection_message', function * () {
