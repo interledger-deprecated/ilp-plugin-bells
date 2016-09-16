@@ -1,7 +1,7 @@
 'use strict'
 
-const UnprocessableEntityError =
-require('five-bells-shared/errors/unprocessable-entity-error')
+const BaseError = require('./base-error')
+class UnprocessableEntityError extends BaseError {}
 
 class UnrelatedNotificationError extends UnprocessableEntityError {
 

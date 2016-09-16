@@ -1,6 +1,6 @@
 'use strict'
 
-const BaseError = require('five-bells-shared').BaseError
+const BaseError = require('./base-error')
 
 class ExternalError extends BaseError {
 
