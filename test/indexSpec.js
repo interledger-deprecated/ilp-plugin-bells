@@ -11,6 +11,7 @@ const mock = require('mock-require')
 const nock = require('nock')
 const sinon = require('sinon')
 const wsHelper = require('./helpers/ws')
+const errors = require('../src/errors')
 const cloneDeep = require('lodash/cloneDeep')
 
 mock('ws', wsHelper.WebSocket)
@@ -606,12 +607,12 @@ describe('PluginBells', function () {
     })
 
     describe('disconnect', function () {
-      it('closes the connection', function () {
+      it('closes the connection', function * () {
         assert.isTrue(this.plugin.isConnected())
-        this.plugin.disconnect()
+        yield assertResolve(this.plugin.disconnect(), null)
         assert.isFalse(this.plugin.isConnected())
         // A second time does nothing.
-        this.plugin.disconnect()
+        yield assertResolve(this.plugin.disconnect(), null)
       })
     })
 
@@ -841,6 +842,28 @@ describe('PluginBells', function () {
         }), null)
       })
 
+      it('throws InvalidFieldsError for missing account', function (done) {
+        this.plugin.send({
+          id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          amount: '1'
+        }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid account').notify(done)
+      })
+
+      it('throws InvalidFieldsError for missing amount', function (done) {
+        this.plugin.send({
+          id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          account: 'example.red.alice'
+        }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid amount').notify(done)
+      })
+
+      it('throws InvalidFieldsError for negative amount', function (done) {
+        this.plugin.send({
+          id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          account: 'example.red.alice',
+          amount: '-1'
+        }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid amount').notify(done)
+      })
+
       it('rejects a transfer when the destination does not begin with the correct prefix', function * () {
         yield assert.isRejected(this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -867,13 +890,13 @@ describe('PluginBells', function () {
             }]
           })
           .basicAuth({user: 'mike', pass: 'mike'})
-          .reply(400, {id: 'SomeError'})
+          .reply(400, {id: 'SomeError', message: 'fail'})
 
         this.plugin.send({
           id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
           account: 'example.red.alice',
           amount: '123'
-        }).should.be.rejectedWith('Remote error: status=400').notify(done)
+        }).should.be.rejectedWith(errors.NotAcceptedError, 'fail').notify(done)
       })
 
       it('sets up case notifications when "cases" is provided', function * () {
@@ -921,15 +944,52 @@ describe('PluginBells', function () {
     })
 
     describe('fulfillCondition', function () {
-      it('errors on improper fulfillment', function (done) {
-        nock('http://red.example')
-          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'garbage')
-          .basicAuth({user: 'mike', pass: 'mike'})
-          .reply(203)
+      it('throws InvalidFieldsError on malformed fulfillment', function (done) {
         this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'garbage')
-          .should.be.rejectedWith('Failed to submit fulfillment for' +
-            ' transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c' +
-            ' Error: undefined')
+          .should.be.rejectedWith(errors.InvalidFieldsError, 'malformed fulfillment')
+          .notify(done)
+      })
+
+      it('throws NotAcceptedError on UnmetConditionError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(422, {id: 'UnmetConditionError', message: 'fail'})
+        this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+          .should.be.rejectedWith(errors.NotAcceptedError, 'fail')
+          .notify(done)
+      })
+
+      it('throws TransferNotConditionalError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(422, {id: 'TransferNotConditionalError', message: 'fail'})
+        this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+          .should.be.rejectedWith(errors.TransferNotConditionalError, 'fail')
+          .notify(done)
+      })
+
+      it('throws TransferNotFoundError on NotFoundError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(404, {id: 'NotFoundError', message: 'fail'})
+        this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+          .should.be.rejectedWith(errors.TransferNotFoundError, 'fail')
+          .notify(done)
+      })
+
+      it('throws AlreadyRolledBackError when fulfilling a rejected transfer', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(404, {
+            id: 'InvalidModificationError',
+            message: 'Transfers in state rejected may not be executed'
+          })
+        this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+          .should.be.rejectedWith(errors.AlreadyRolledBackError, 'Transfers in state rejected may not be executed')
           .notify(done)
       })
 
@@ -949,7 +1009,9 @@ describe('PluginBells', function () {
           .basicAuth({user: 'mike', pass: 'mike'})
           .reply(500)
         this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
-          .should.be.rejectedWith('Remote error: status=500')
+          .should.be.rejectedWith('Failed to submit fulfillment for' +
+            ' transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c' +
+            ' Error: undefined')
           .notify(done)
       })
     })
@@ -965,7 +1027,7 @@ describe('PluginBells', function () {
           'cf:0:ZXhlY3V0ZQ')
       })
 
-      it('throws on TransferNotFoundError', function * () {
+      it('throws TransferNotFoundError', function * () {
         nock('http://red.example')
           .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
           .basicAuth({user: 'mike', pass: 'mike'})
@@ -982,12 +1044,12 @@ describe('PluginBells', function () {
         assert(false)
       })
 
-      it('throws on FulfillmentNotFoundError', function * () {
+      it('throws MissingFulfillmentError', function * () {
         nock('http://red.example')
           .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
           .basicAuth({user: 'mike', pass: 'mike'})
           .reply(404, {
-            id: 'FulfillmentNotFoundError',
+            id: 'MissingFulfillmentError',
             message: 'This transfer has no fulfillment'
           })
         try {
@@ -1040,18 +1102,40 @@ describe('PluginBells', function () {
           null)
       })
 
-      it('throws on error', function * () {
+      it('throws NotAcceptedError on UnauthorizedError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+          .reply(422, {id: 'UnauthorizedError', message: 'error'})
+        this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
+          .should.be.rejectedWith(errors.NotAcceptedError, 'error')
+          .notify(done)
+      })
+
+      it('throws TransferNotFoundError on NotFoundError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+          .reply(404, {id: 'NotFoundError', message: 'error'})
+        this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
+          .should.be.rejectedWith(errors.TransferNotFoundError, 'error')
+          .notify(done)
+      })
+
+      it('throws AlreadyFulfilledError on InvalidModificationError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+          .reply(404, {id: 'InvalidModificationError', message: 'error'})
+        this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
+          .should.be.rejectedWith(errors.AlreadyFulfilledError, 'error')
+          .notify(done)
+      })
+
+      it('throws ExternalError on 500', function (done) {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
           .reply(500)
-        try {
-          yield this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
-        } catch (err) {
-          assert.equal(err.name, 'ExternalError')
-          assert.equal(err.message, 'Remote error: status=500')
-          return
-        }
-        assert(false)
+        this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
+          .should.be.rejectedWith('Remote error: status=500')
+          .notify(done)
       })
     })
   })
