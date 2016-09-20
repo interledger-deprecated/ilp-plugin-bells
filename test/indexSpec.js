@@ -874,7 +874,33 @@ describe('PluginBells', function () {
         }), /^Error: Destination address "red.alice" must start with ledger prefix "example.red."$/)
       })
 
-      it('throws an ExternalError on 400', function (done) {
+      it('throws an InvalidFieldsError on InvalidBodyError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(400, {id: 'InvalidBodyError', message: 'fail'})
+
+        this.plugin.send({
+          id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          account: 'example.red.alice',
+          amount: '123'
+        }).should.be.rejectedWith(errors.InvalidFieldsError, 'fail').notify(done)
+      })
+
+      it('throws a DuplicateIdError on InvalidModificationError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(400, {id: 'InvalidModificationError', message: 'fail'})
+
+        this.plugin.send({
+          id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          account: 'example.red.alice',
+          amount: '123'
+        }).should.be.rejectedWith(errors.DuplicateIdError, 'fail').notify(done)
+      })
+
+      it('throws an NotAcceptedError on 400', function (done) {
         nock('http://red.example')
           .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', {
             id: 'http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -944,9 +970,13 @@ describe('PluginBells', function () {
     })
 
     describe('fulfillCondition', function () {
-      it('throws InvalidFieldsError on malformed fulfillment', function (done) {
-        this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'garbage')
-          .should.be.rejectedWith(errors.InvalidFieldsError, 'malformed fulfillment')
+      it('throws InvalidFieldsError on InvalidBodyError', function (done) {
+        nock('http://red.example')
+          .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+          .basicAuth({user: 'mike', pass: 'mike'})
+          .reply(422, {id: 'InvalidBodyError', message: 'fail'})
+        this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+          .should.be.rejectedWith(errors.InvalidFieldsError, 'fail')
           .notify(done)
       })
 

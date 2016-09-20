@@ -14,7 +14,6 @@ const isUndefined = require('lodash/fp/isUndefined')
 const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
 const startsWith = require('lodash/fp/startsWith')
 const find = require('lodash/find')
-const cc = require('five-bells-condition')
 
 const backoffMin = 1000
 const backoffMax = 30000
@@ -313,10 +312,12 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _send (transfer) {
-    const validAccount = typeof transfer.account === 'string'
-    const validAmount = typeof transfer.amount === 'string' && +transfer.amount > 0
-    if (!validAccount) throw new errors.InvalidFieldsError('invalid account')
-    if (!validAmount) throw new errors.InvalidFieldsError('invalid amount')
+    if (typeof transfer.account !== 'string') {
+      throw new errors.InvalidFieldsError('invalid account')
+    }
+    if (typeof transfer.amount !== 'string' || +transfer.amount <= 0) {
+      throw new errors.InvalidFieldsError('invalid amount')
+    }
 
     const sourceAddress = yield this.parseAddress(transfer.account)
     const fiveBellsTransfer = omitUndefined({
@@ -367,6 +368,7 @@ class FiveBellsLedger extends EventEmitter2 {
       }))
     const body = sendRes.body
     if (sendRes.statusCode >= 400) {
+      if (body.id === 'InvalidBodyError') throw new errors.InvalidFieldsError(body.message)
       if (body.id === 'InvalidModificationError') throw new errors.DuplicateIdError(body.message)
       throw new errors.NotAcceptedError(body.message)
     }
@@ -381,12 +383,6 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _fulfillCondition (transferId, conditionFulfillment) {
-    try {
-      cc.fromFulfillmentUri(conditionFulfillment)
-    } catch (e) {
-      throw new errors.InvalidFieldsError('malformed fulfillment')
-    }
-
     const fulfillmentRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'put',
@@ -396,6 +392,7 @@ class FiveBellsLedger extends EventEmitter2 {
     const body = getResponseJSON(fulfillmentRes)
 
     if (fulfillmentRes.statusCode >= 400 && body) {
+      if (body.id === 'InvalidBodyError') throw new errors.InvalidFieldsError(body.message)
       if (body.id === 'UnmetConditionError') throw new errors.NotAcceptedError(body.message)
       if (body.id === 'TransferNotConditionalError') throw new errors.TransferNotConditionalError(body.message)
       if (body.id === 'NotFoundError') throw new errors.TransferNotFoundError(body.message)
