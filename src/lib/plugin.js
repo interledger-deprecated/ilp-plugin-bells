@@ -6,10 +6,9 @@ const request = require('co-request')
 const WebSocket = require('ws')
 const reconnectCore = require('reconnect-core')
 const debug = require('debug')('ilp-plugin-bells:plugin')
+const errors = require('../errors')
 const ExternalError = require('../errors/external-error')
 const UnrelatedNotificationError = require('../errors/unrelated-notification-error')
-const MissingFulfillmentError = require('../errors/missing-fulfillment-error')
-const TransferNotFoundError = require('../errors/transfer-not-found-error')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
 const isUndefined = require('lodash/fp/isUndefined')
 const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
@@ -198,28 +197,31 @@ class FiveBellsLedger extends EventEmitter2 {
         // reconnect-core expects the disconnect method to be called: `end`
         ws.end = ws.close
       })
-      .once('connect', () => resolve(null))
-      .on('connect', () => {
-        this.connected = true
-        this.emit('connect')
-      })
-      .on('disconnect', () => {
-        this.connected = false
-        this.emit('disconnect')
-      })
-      .on('error', (err) => {
-        debug('ws error on ' + streamUri + ': ' + err)
-        reject(err)
-      })
-      .connect()
+      this.connection
+        .once('connect', () => resolve(null))
+        .on('connect', () => {
+          this.connected = true
+          this.emit('connect')
+        })
+        .on('disconnect', () => {
+          this.connected = false
+          this.emit('disconnect')
+        })
+        .on('error', (err) => {
+          debug('ws error on ' + streamUri + ': ' + err)
+          reject(err)
+        })
+        .connect()
     })
   }
 
   disconnect () {
-    if (this.connection) {
-      this.connection.disconnect()
-      this.connection = null
-    }
+    const emitter = this.connection
+    if (!emitter) return Promise.resolve(null)
+    this.connection = null
+    // WebSocket#end doesn't exist, so reconnect-core#disconnect is no good.
+    emitter.reconnect = false
+    if (emitter._connection) emitter._connection.close()
     return Promise.resolve(null)
   }
 
@@ -310,6 +312,13 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _send (transfer) {
+    if (typeof transfer.account !== 'string') {
+      throw new errors.InvalidFieldsError('invalid account')
+    }
+    if (typeof transfer.amount !== 'string' || +transfer.amount <= 0) {
+      throw new errors.InvalidFieldsError('invalid amount')
+    }
+
     const sourceAddress = yield this.parseAddress(transfer.account)
     const fiveBellsTransfer = omitUndefined({
       id: this.host + '/transfers/' + transfer.id,
@@ -349,11 +358,20 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     debug('submitting transfer %s', fiveBellsTransfer.id)
-    yield this._request({
-      method: 'put',
-      uri: fiveBellsTransfer.id,
-      body: fiveBellsTransfer
-    })
+
+    const sendRes = yield request(Object.assign(
+      requestCredentials(this.credentials), {
+        method: 'put',
+        uri: fiveBellsTransfer.id,
+        body: fiveBellsTransfer,
+        json: true
+      }))
+    const body = sendRes.body
+    if (sendRes.statusCode >= 400) {
+      if (body.id === 'InvalidBodyError') throw new errors.InvalidFieldsError(body.message)
+      if (body.id === 'InvalidModificationError') throw new errors.DuplicateIdError(body.message)
+      throw new errors.NotAcceptedError(body.message)
+    }
 
     // TODO: If already executed, fetch fulfillment and forward to source
 
@@ -365,18 +383,31 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _fulfillCondition (transferId, conditionFulfillment) {
-    const fulfillmentRes = yield this._request({
-      method: 'put',
-      uri: this.host + '/transfers/' + transferId + '/fulfillment',
-      body: conditionFulfillment,
-      json: false
-    })
+    const fulfillmentRes = yield request(Object.assign(
+      requestCredentials(this.credentials), {
+        method: 'put',
+        uri: this.host + '/transfers/' + transferId + '/fulfillment',
+        body: conditionFulfillment
+      }))
+    const body = getResponseJSON(fulfillmentRes)
+
+    if (fulfillmentRes.statusCode >= 400 && body) {
+      if (body.id === 'InvalidBodyError') throw new errors.InvalidFieldsError(body.message)
+      if (body.id === 'UnmetConditionError') throw new errors.NotAcceptedError(body.message)
+      if (body.id === 'TransferNotConditionalError') throw new errors.TransferNotConditionalError(body.message)
+      if (body.id === 'NotFoundError') throw new errors.TransferNotFoundError(body.message)
+      if (body.id === 'InvalidModificationError' &&
+       body.message === 'Transfers in state rejected may not be executed') {
+        throw new errors.AlreadyRolledBackError(body.message)
+      }
+    }
+
     // TODO check the timestamp the ledger sends back
     // See https://github.com/interledger/five-bells-ledger/issues/149
     if (fulfillmentRes.statusCode === 200 || fulfillmentRes.statusCode === 201) {
       return null
     } else {
-      throw new Error('Failed to submit fulfillment for transfer: ' + transferId + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
+      throw new ExternalError('Failed to submit fulfillment for transfer: ' + transferId + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
     }
   }
 
@@ -401,13 +432,11 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     if (res.statusCode === 200) return res.body
-    if (res.statusCode === 404) {
-      if (res.body.id === 'FulfillmentNotFoundError') {
-        throw new MissingFulfillmentError(res.body.message)
-      }
-      if (res.body.id === 'TransferNotFoundError') {
-        throw new TransferNotFoundError(res.body.message)
-      }
+    if (res.statusCode >= 400 && res.body) {
+      if (res.body.id === 'MissingFulfillmentError') throw new errors.MissingFulfillmentError(res.body.message)
+      if (res.body.id === 'TransferNotFoundError') throw new errors.TransferNotFoundError(res.body.message)
+      if (res.body.id === 'AlreadyRolledBackError') throw new errors.AlreadyRolledBackError(res.body.message)
+      if (res.body.id === 'TransferNotConditionalError') throw new errors.TransferNotConditionalError(res.body.message)
     }
     throw new ExternalError('Remote error: status=' + (res && res.statusCode))
   }
@@ -422,12 +451,21 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _rejectIncomingTransfer (transferId, rejectionMessage) {
-    yield this._request({
-      method: 'put',
-      uri: this.host + '/transfers/' + transferId + '/rejection',
-      body: rejectionMessage,
-      json: false
-    })
+    const rejectionRes = yield request(Object.assign(
+      requestCredentials(this.credentials), {
+        method: 'put',
+        uri: this.host + '/transfers/' + transferId + '/rejection',
+        body: rejectionMessage
+      }))
+    const body = getResponseJSON(rejectionRes)
+
+    if (rejectionRes.statusCode >= 400) {
+      if (body && body.id === 'UnauthorizedError') throw new errors.NotAcceptedError(body.message)
+      if (body && body.id === 'NotFoundError') throw new errors.TransferNotFoundError(body.message)
+      if (body && body.id === 'InvalidModificationError') throw new errors.AlreadyFulfilledError(body.message)
+      if (body && body.id === 'TransferNotConditionalError') throw new errors.TransferNotConditionalError(body.message)
+      throw new ExternalError('Remote error: status=' + rejectionRes.statusCode)
+    }
     return null
   }
 
@@ -473,7 +511,13 @@ class FiveBellsLedger extends EventEmitter2 {
           yield this.emitAsync('incoming_cancel', transfer,
             relatedResources.cancellation_condition_fulfillment)
         } else if (fiveBellsTransfer.state === 'rejected') {
-          yield this.emitAsync('incoming_cancel', transfer, 'transfer timed out.')
+          const rejectedCredit = find(fiveBellsTransfer.credits, 'rejected')
+          if (rejectedCredit) {
+            yield this.emitAsync('incoming_reject', transfer,
+              new Buffer(rejectedCredit.rejection_message, 'base64').toString())
+          } else {
+            yield this.emitAsync('incoming_cancel', transfer, 'transfer timed out.')
+          }
         }
       }
     }
@@ -596,6 +640,13 @@ function requestCredentials (credentials) {
     key: credentials.key,
     ca: credentials.ca
   })
+}
+
+function getResponseJSON (res) {
+  const contentType = res.headers['content-type']
+  if (!contentType) return
+  if (contentType.indexOf('application/json') !== 0) return
+  return JSON.parse(res.body)
 }
 
 module.exports = FiveBellsLedger
