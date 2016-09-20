@@ -1,6 +1,6 @@
 'use strict'
 
-const NotFoundError = require('five-bells-shared').NotFoundError
+const NotFoundError = require('./not-found-error')
 
 class MissingFulfillmentError extends NotFoundError {
   * handler (ctx, log) {
