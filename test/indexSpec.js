@@ -68,7 +68,13 @@ describe('PluginBells', function () {
         password: 'mike'
       })
 
+      this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
       this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
+    })
+
+    afterEach(function * () {
+      this.wsRedLedger.stop()
+      assert(nock.isDone(), 'nock was not called')
     })
 
     describe('connect', function () {
@@ -85,6 +91,21 @@ describe('PluginBells', function () {
 
         yield assertResolve(this.plugin.connect(), null)
         assert.isTrue(this.plugin.isConnected())
+      })
+
+      it('doesn\'t connect when ws server is down', function () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+        nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+
+        this.wsRedLedger.stop()
+        return this.plugin.connect().should.be.rejected
       })
 
       it('ignores if called twice', function * () {
@@ -716,6 +737,7 @@ describe('PluginBells', function () {
           }
         })
 
+        const wsRedLedger = new wsHelper.Server('ws://blue.example/accounts/mike/transfers')
         const infoRedLedger = Object.assign(
           cloneDeep(require('./data/infoRedLedger.json')),
           { ilp_prefix: 'example.blue.' }
@@ -735,6 +757,7 @@ describe('PluginBells', function () {
           assert.equal(plugin.prefix, 'example.red.')
           nockInfo.done()
           nockAccount.done()
+          wsRedLedger.stop()
           done()
         })
       })

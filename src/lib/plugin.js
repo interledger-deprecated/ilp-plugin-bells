@@ -9,6 +9,7 @@ const debug = require('debug')('ilp-plugin-bells:plugin')
 const errors = require('../errors')
 const ExternalError = require('../errors/external-error')
 const UnrelatedNotificationError = require('../errors/unrelated-notification-error')
+const UnreachableError = require('../errors/unreachable-error')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
 const isUndefined = require('lodash/fp/isUndefined')
 const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
@@ -164,6 +165,7 @@ class FiveBellsLedger extends EventEmitter2 {
       this.connection = reconnect({immediate: true}, (ws) => {
         ws.on('open', () => {
           debug('ws connected to ' + streamUri)
+          resolve(null)
         })
         ws.on('message', (msg) => {
           const notification = JSON.parse(msg)
@@ -190,15 +192,19 @@ class FiveBellsLedger extends EventEmitter2 {
               }
             })
         })
+        ws.on('error', () => {
+          debug('ws connection error on ' + streamUri)
+          reject(new UnreachableError('websocket connection error'))
+        })
         ws.on('close', () => {
           debug('ws disconnected from ' + streamUri)
+          reject(new UnreachableError('websocket connection error'))
         })
 
         // reconnect-core expects the disconnect method to be called: `end`
         ws.end = ws.close
       })
       this.connection
-        .once('connect', () => resolve(null))
         .on('connect', () => {
           this.connected = true
           this.emit('connect')
