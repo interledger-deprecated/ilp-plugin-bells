@@ -215,7 +215,7 @@ class FiveBellsLedger extends EventEmitter2 {
           this.emit('disconnect')
         })
         .on('error', (err) => {
-          debug('ws error on ' + notificationsUrl + ': ' + err)
+          debug('ws error on ' + notificationsUrl + ':', err)
           reject(err)
         })
         .connect()
