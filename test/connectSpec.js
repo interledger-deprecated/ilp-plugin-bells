@@ -110,6 +110,37 @@ describe('Connection methods', function () {
       infoNock.done()
     })
 
+    it('should set urls from object in metadata', function * () {
+      const accountNock = nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      const urls = {
+        'health': 'http://random.example/health',
+        'transfer': 'http://another.example/endpoint/:id',
+        'transfer_fulfillment': 'http://garbage.example/anything/:id/something',
+        'transfer_rejection': 'http://abc.example/athing/:id/another',
+        'transfer_state': 'http://more.example/:id/state',
+        'connectors': 'http://other.example/',
+        'accounts': 'http://thing.example/a',
+        'account': 'http://red.example/accounts/:name',
+        'account_transfers': 'ws://account.example/:name/t'
+      }
+      const wsRedLedger = new wsHelper.Server('ws://account.example/mike/t')
+      const infoNock = nock('http://red.example')
+        .get('/')
+        .reply(200, Object.assign({}, this.infoRedLedger, {urls: urls}))
+
+      yield this.plugin.connect()
+      assert.deepEqual(this.plugin.urls, urls, 'urls should be set from metadata')
+
+      accountNock.done()
+      infoNock.done()
+      wsRedLedger.stop()
+    })
+
     it('should not overwrite the username if one is specified in the options', function * () {
       const accountNock = nock('http://red.example')
         .get('/accounts/mike')
