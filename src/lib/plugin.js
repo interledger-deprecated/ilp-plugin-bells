@@ -19,6 +19,8 @@ const find = require('lodash/find')
 const backoffMin = 1000
 const backoffMax = 30000
 
+const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'account_transfers' ]
+
 function wait (ms) {
   return function (done) {
     setTimeout(done, ms)
@@ -131,7 +133,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
     // Resolve ledger metadata
     const ledgerMetadata = yield this._fetchLedgerMetadata()
-    this.urls = ledgerMetadata.urls
+    this.urls = parseAndValidateLedgerUrls(ledgerMetadata.urls)
     debug('using service urls:', this.urls)
 
     // Set ILP prefix
@@ -651,6 +653,32 @@ function getResponseJSON (res) {
   if (!contentType) return
   if (contentType.indexOf('application/json') !== 0) return
   return JSON.parse(res.body)
+}
+
+function parseAndValidateLedgerUrls (metadataUrls) {
+  if (!metadataUrls) {
+    throw new ExternalError('ledger metadata does not include a urls map')
+  }
+
+  const urls = {}
+  REQUIRED_LEDGER_URLS.forEach((service) => {
+    if (!metadataUrls[service]) {
+      throw new ExternalError('ledger metadata does not include ' + service + ' url')
+    }
+
+    if (service === 'account_transfers') {
+      if (metadataUrls[service].indexOf('ws') !== 0) {
+        throw new ExternalError('ledger metadata ' + service + ' url must be a full ws(s) url')
+      }
+    } else {
+      if (metadataUrls[service].indexOf('http') !== 0) {
+        throw new ExternalError('ledger metadata ' + service + ' url must be a full http(s) url')
+      }
+    }
+    urls[service] = metadataUrls[service]
+  })
+
+  return urls
 }
 
 module.exports = FiveBellsLedger

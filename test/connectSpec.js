@@ -12,6 +12,7 @@ const nock = require('nock')
 const wsHelper = require('./helpers/ws')
 const cloneDeep = require('lodash/cloneDeep')
 const _ = require('lodash')
+const ExternalError = require('../src/errors/external-error')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -111,7 +112,7 @@ describe('Connection methods', function () {
       infoNock.done()
     })
 
-    it('should set urls from object in metadata', function * () {
+    it('should set urls from object in ledger metadata and strip unnecessary values', function * () {
       const accountNock = nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -129,17 +130,214 @@ describe('Connection methods', function () {
         'account': 'http://red.example/accounts/:name',
         'account_transfers': 'ws://red.example/accounts/:name/transfers'
       }
-      const wsRedLedger = new wsHelper.Server('ws://account.example/mike/t')
       const infoNock = nock('http://red.example')
         .get('/')
         .reply(200, Object.assign({}, this.infoRedLedger, {urls: urls}))
 
       yield this.plugin.connect()
-      assert.deepEqual(this.plugin.urls, urls, 'urls should be set from metadata')
-
+      assert.deepEqual(this.plugin.urls, _.pick(urls, [
+        'transfer',
+        'transfer_fulfillment',
+        'transfer_rejection',
+        'account',
+        'account_transfers'
+      ]), 'urls should be set from metadata')
       accountNock.done()
       infoNock.done()
-      wsRedLedger.stop()
+    })
+
+    it('should reject if the ledger metadata does not include a urls map', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, Object.assign({}, this.infoRedLedger, {urls: null}))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include a urls map')
+    })
+
+    it('should reject if the ledger metadata does not include transfer url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            transfer: null
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer url')
+    })
+
+    it('should reject if the ledger metadata transfer url is not a full http url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            transfer: '/transfers/:id'
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata transfer url must be a full http(s) url')
+    })
+
+    it('should reject if the ledger metadata does not include transfer_fulfillment url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            transfer_fulfillment: null
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer_fulfillment url')
+    })
+
+    it('should reject if the ledger metadata transfer_fulfillment url is not a full http url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            transfer_fulfillment: '/transfer_fulfillment/:id'
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata transfer_fulfillment url must be a full http(s) url')
+    })
+
+    it('should reject if the ledger metadata does not include transfer_rejection url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            transfer_rejection: null
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer_rejection url')
+    })
+
+    it('should reject if the ledger metadata transfer_rejection url is not a full http url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            transfer_rejection: '/transfer_fulfillment/:id'
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata transfer_rejection url must be a full http(s) url')
+    })
+
+    it('should reject if the ledger metadata does not include account url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            account: null
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include account url')
+    })
+
+    it('should reject if the ledger metadata account url is not a full http url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            account: '/accounts/:name'
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata account url must be a full http(s) url')
+    })
+
+    it('should reject if the ledger metadata does not include account_transfers url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            account_transfers: null
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include account_transfers url')
+    })
+
+    it('should reject if the ledger metadata account_transfers url is not a full ws url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge({}, this.infoRedLedger, {
+          urls: {
+            account_transfers: '/accounts/:name/transfers'
+          }
+        }))
+
+      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata account_transfers url must be a full ws(s) url')
     })
 
     it('should subscribe to notifications using the account_transfers websocket url', function * () {
@@ -283,3 +481,17 @@ function * assertResolve (promise, expected) {
   assert(promise instanceof Promise)
   assert.deepEqual(yield promise, expected)
 }
+
+function * assertRejectsWith (promise, errorConstructor, errorMessage) {
+  assert(promise instanceof Promise)
+  let error
+  try {
+    yield promise
+  } catch (e) {
+    error = e
+  }
+  assert.ok(error, 'promise did not reject')
+  assert.instanceOf(error, errorConstructor)
+  assert.equal(error.message, errorMessage)
+}
+

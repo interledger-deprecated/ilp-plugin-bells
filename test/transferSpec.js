@@ -58,6 +58,7 @@ describe('Transfer methods', function () {
 
   afterEach(function * () {
     this.wsRedLedger.stop()
+    assert(nock.isDone(), 'nocks should all have been called')
   })
 
   describe('send', function () {
@@ -73,7 +74,6 @@ describe('Transfer methods', function () {
       nock.removeInterceptor(this.nockInfo)
       nock('http://red.example')
         .get('/accounts/mike')
-        .times(2)
         .reply(200, {
           ledger: 'http://red.example',
           name: 'mike'
