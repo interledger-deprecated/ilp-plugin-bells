@@ -35,12 +35,12 @@ function * requestRetry (opts, errorMessage, credentials) {
         requestCredentials(credentials),
         opts))
       if (res.statusCode >= 400 && res.statusCode < 500) {
-        debug('request status ' + res.statusCode + ' retrying connection')
         break
       }
+      debug('request status ' + res.statusCode + ' retrying connection')
       return res
     } catch (err) {
-      debug('http request failed: ' + errorMessage)
+      debug('http request failed: ', err)
       delay = Math.min(Math.floor(1.5 * delay), backoffMax)
       yield wait(delay)
     }
@@ -132,6 +132,7 @@ class FiveBellsLedger extends EventEmitter2 {
     // Resolve ledger metadata
     const ledgerMetadata = yield this._fetchLedgerMetadata()
     this.urls = ledgerMetadata.urls
+    debug('using service urls:', this.urls)
 
     // Set ILP prefix
     const ledgerPrefix = ledgerMetadata.ilp_prefix
@@ -364,7 +365,7 @@ class FiveBellsLedger extends EventEmitter2 {
       }
     }
 
-    debug('submitting transfer %s', fiveBellsTransfer.id)
+    debug('submitting transfer:', fiveBellsTransfer)
 
     const sendRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
@@ -601,10 +602,6 @@ class FiveBellsLedger extends EventEmitter2 {
       throw error
     }
     return transferRes
-  }
-
-  accountNameToUri (name) {
-    return this.urls.account.replace(':name', name)
   }
 
   /**

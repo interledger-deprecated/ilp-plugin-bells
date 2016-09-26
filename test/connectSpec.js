@@ -11,6 +11,7 @@ const mock = require('mock-require')
 const nock = require('nock')
 const wsHelper = require('./helpers/ws')
 const cloneDeep = require('lodash/cloneDeep')
+const _ = require('lodash')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -126,7 +127,7 @@ describe('Connection methods', function () {
         'connectors': 'http://other.example/',
         'accounts': 'http://thing.example/a',
         'account': 'http://red.example/accounts/:name',
-        'account_transfers': 'ws://account.example/:name/t'
+        'account_transfers': 'ws://red.example/accounts/:name/transfers'
       }
       const wsRedLedger = new wsHelper.Server('ws://account.example/mike/t')
       const infoNock = nock('http://red.example')
@@ -141,6 +142,33 @@ describe('Connection methods', function () {
       wsRedLedger.stop()
     })
 
+    it('should subscribe to notifications using the account_transfers websocket url', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      let usedCorrectWsUrl = false
+      const wsRedLedger = new wsHelper.Server('ws://somewhererandom.example/notifications/mike')
+      wsRedLedger.on('connection', () => {
+        usedCorrectWsUrl = true
+      })
+
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge(this.infoRedLedger, {
+          urls: {
+            account_transfers: 'ws://somewhererandom.example/notifications/:name'
+          }
+        }))
+
+      yield this.plugin.connect()
+
+      assert.equal(usedCorrectWsUrl, true, 'did not use the ws url from the metadata')
+
+      wsRedLedger.stop()
+    })
     it('should not overwrite the username if one is specified in the options', function * () {
       const accountNock = nock('http://red.example')
         .get('/accounts/mike')
@@ -228,14 +256,14 @@ describe('Connection methods', function () {
 
   describe('disconnect', function () {
     beforeEach(function * () {
-      const nockAccount = nock('http://red.example')
+      nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
           ledger: 'http://red.example',
           name: 'mike'
         })
 
-      const nockInfo = nock('http://red.example')
+      nock('http://red.example')
         .get('/')
         .reply(200, this.infoRedLedger)
 

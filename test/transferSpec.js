@@ -12,6 +12,7 @@ const nock = require('nock')
 const wsHelper = require('./helpers/ws')
 const errors = require('../src/errors')
 const cloneDeep = require('lodash/cloneDeep')
+const _ = require('lodash')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -29,27 +30,30 @@ describe('Transfer methods', function () {
       }
     })
 
-    this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
-
-    const nockAccount = nock('http://red.example')
+    this.nockAccount = nock('http://red.example')
       .get('/accounts/mike')
       .reply(200, {
         ledger: 'http://red.example',
         name: 'mike'
       })
 
-    const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
+    this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
+    this.ledgerTransfer = cloneDeep(require('./data/transfer.json'))
+    this.transfer = {
+      id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+      account: 'example.red.alice',
+      amount: '123',
+      noteToSelf: {source: 'something'},
+      data: {foo: 'bar'}
+    }
 
-    const nockInfo = nock('http://red.example')
+    this.nockInfo = nock('http://red.example')
       .get('/')
-      .reply(200, infoRedLedger)
+      .reply(200, this.infoRedLedger)
 
     this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
 
     yield this.plugin.connect()
-
-    nockAccount.done()
-    nockInfo.done()
   })
 
   afterEach(function * () {
@@ -59,30 +63,47 @@ describe('Transfer methods', function () {
   describe('send', function () {
     it('submits a transfer', function * () {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', {
-          id: 'http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-          ledger: 'http://red.example',
-          debits: [{
-            account: 'http://red.example/accounts/mike',
-            amount: '123',
-            authorized: true,
-            memo: {source: 'something'}
-          }],
-          credits: [{
-            account: 'http://red.example/accounts/alice',
-            amount: '123',
-            memo: {foo: 'bar'}
-          }]
-        })
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', this.ledgerTransfer)
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200)
-      yield assertResolve(this.plugin.send({
-        id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-        account: 'example.red.alice',
-        amount: '123',
-        noteToSelf: {source: 'something'},
-        data: {foo: 'bar'}
-      }), null)
+      yield assertResolve(this.plugin.send(this.transfer), null)
+    })
+
+    it('should use the transfer url from the ledger metadata', function * () {
+      nock.removeInterceptor(this.nockInfo)
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .times(2)
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      const nockInfo = nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge(this.infoRedLedger, {
+          urls: {
+            transfer: 'http://red.example/other/place/to/submit/transfers/:id'
+          }
+        }))
+      const transferNock = nock('http://red.example')
+        .put('/other/place/to/submit/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
+        .reply(200)
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike',
+        debugReplyNotifications: true,
+        debugAutofund: {
+          connector: 'http://mark.example',
+          admin: {username: 'adminuser', password: 'adminpass'}
+        }
+      })
+      yield plugin.connect()
+
+      yield plugin.send(this.transfer)
+
+      nockInfo.done()
+      transferNock.done()
     })
 
     it('throws InvalidFieldsError for missing account', function (done) {
@@ -274,6 +295,44 @@ describe('Transfer methods', function () {
       yield assertResolve(this.plugin.fulfillCondition(
         '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         'cf:0:ZXhlY3V0ZQ'), null)
+    })
+
+    it('should use the transfer_fulfillment url from the ledger metadata', function * () {
+      nock.removeInterceptor(this.nockInfo)
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      const nockInfo = nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge(this.infoRedLedger, {
+          urls: {
+            transfer_fulfillment: 'http://red.example/other/place/to/submit/transfers/:id/fulfillment'
+          }
+        }))
+      const fulfillmentNock = nock('http://red.example')
+        .put('/other/place/to/submit/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
+        .reply(200)
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike',
+        debugReplyNotifications: true,
+        debugAutofund: {
+          connector: 'http://mark.example',
+          admin: {username: 'adminuser', password: 'adminpass'}
+        }
+      })
+      yield plugin.connect()
+
+      yield assertResolve(plugin.fulfillCondition(
+        '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+        'cf:0:ZXhlY3V0ZQ'), null)
+
+      nockInfo.done()
+      fulfillmentNock.done()
     })
 
     it('throws an ExternalError on 500', function (done) {

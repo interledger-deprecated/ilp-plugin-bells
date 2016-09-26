@@ -1,0 +1,20 @@
+{
+  "id": "http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c",
+  "ledger": "http://red.example",
+  "debits": [{
+    "account": "http://red.example/accounts/mike",
+    "amount": "123",
+    "authorized": true,
+    "memo": {
+      "source": "something"
+    }
+  }],
+  "credits": [{
+    "account": "http://red.example/accounts/alice",
+    "amount": "123",
+    "memo": {
+      "foo": "bar"
+    }
+  }]
+}
+
