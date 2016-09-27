@@ -98,6 +98,7 @@ describe('Notification handling', function () {
 
   afterEach(function * () {
     this.wsRedLedger.stop()
+    assert(nock.isDone(), 'all nocks should be called')
   })
 
   describe('notifications of unrelated transfers', function () {

@@ -3,7 +3,6 @@
 const chai = require('chai')
 const chaiAsPromised = require('chai-as-promised')
 chai.use(chaiAsPromised)
-chai.should()
 
 const assert = chai.assert
 
@@ -30,7 +29,7 @@ describe('Info methods', function () {
 
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
-    const nockAccount = nock('http://red.example')
+    nock('http://red.example')
       .get('/accounts/mike')
       .reply(200, {
         ledger: 'http://red.example',
@@ -39,19 +38,17 @@ describe('Info methods', function () {
 
     const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
-    const nockInfo = nock('http://red.example')
+    nock('http://red.example')
       .get('/')
       .reply(200, infoRedLedger)
 
     this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
 
     yield this.plugin.connect()
-
-    nockAccount.done()
-    nockInfo.done()
   })
 
   afterEach(function * () {
+    assert(nock.isDone(), 'all nocks should be called')
     this.wsRedLedger.stop()
   })
 
@@ -71,47 +68,41 @@ describe('Info methods', function () {
         precision: 2,
         scale: 4
       }
-      yield assertResolve(this.plugin.getInfo(), info)
+      yield assert.eventually.deepEqual(this.plugin.getInfo(), info)
       // The result is cached.
-      yield assertResolve(this.plugin.getInfo(), info)
+      yield assert.eventually.deepEqual(this.plugin.getInfo(), info)
     })
 
-    it('throws an ExternalError on 500', function (done) {
+    it('throws an ExternalError on 500', function () {
       nock('http://red.example')
         .get('/')
         .reply(500)
-      this.plugin.getInfo().should.be
-        .rejectedWith('Unable to determine ledger precision')
-        .notify(done)
+      return assert.isRejected(this.plugin.getInfo(), /ExternalError: Unable to determine ledger precision/)
     })
 
-    it('throws an ExternalError when the precision is missing', function (done) {
+    it('throws an ExternalError when the precision is missing', function () {
       nock('http://red.example')
         .get('/')
         .reply(200, {scale: 4})
-      this.plugin.getInfo().should.be
-        .rejectedWith('Unable to determine ledger precision')
-        .notify(done)
+      return assert.isRejected(this.plugin.getInfo(), /ExternalError: Unable to determine ledger precision/)
     })
   })
 
   describe('getPrefix', function () {
     it('returns the plugin\'s prefix', function * () {
-      yield assertResolve(this.plugin.getPrefix(), 'example.red.')
+      yield assert.isFulfilled(this.plugin.getPrefix(), 'example.red.')
     })
 
-    it('fails without any prefix', function (done) {
+    it('fails without any prefix', function () {
       const plugin = new PluginBells({
         // no prefix
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      plugin.getPrefix().should.be
-        .rejectedWith('Prefix has not been set')
-        .notify(done)
+      return assert.isRejected(plugin.getPrefix(), /Error: Prefix has not been set/)
     })
 
-    it('cannot connect without any prefix', function (done) {
+    it('cannot connect without any prefix', function * () {
       const plugin = new PluginBells({
         account: 'http://blue.example/accounts/mike',
         password: 'mike',
@@ -123,27 +114,21 @@ describe('Info methods', function () {
       })
 
       const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
-      const nockInfo = nock('http://blue.example')
+      nock('http://blue.example')
         .get('/')
         .reply(200, infoRedLedger)
 
-      const nockAccount = nock('http://blue.example')
+      nock('http://blue.example')
         .get('/accounts/mike')
         .reply(200, {
           ledger: 'http://blue.example',
           name: 'mike'
         })
 
-      plugin.connect().should.be
-        .rejectedWith('Unable to set prefix from ledger or from local config')
-        .notify(() => {
-          nockInfo.done()
-          nockAccount.done()
-          done()
-        })
+      yield assert.isRejected(plugin.connect(), /Error: Unable to set prefix from ledger or from local config/)
     })
 
-    it('should use local if ledger and local prefix don\'t match', function (done) {
+    it('should use local if ledger and local prefix don\'t match', function * () {
       const plugin = new PluginBells({
         prefix: 'example.red.',
         account: 'http://blue.example/accounts/mike',
@@ -159,23 +144,19 @@ describe('Info methods', function () {
         cloneDeep(require('./data/infoRedLedger.json')),
         { ilp_prefix: 'example.blue.' }
       )
-      const nockInfo = nock('http://blue.example')
+      nock('http://blue.example')
         .get('/')
         .reply(200, infoRedLedger)
 
-      const nockAccount = nock('http://blue.example')
+      nock('http://blue.example')
         .get('/accounts/mike')
         .reply(200, {
           ledger: 'http://blue.example',
           name: 'mike'
         })
 
-      plugin.connect().then(() => {
-        assert.equal(plugin.prefix, 'example.red.')
-        nockInfo.done()
-        nockAccount.done()
-        done()
-      })
+      yield plugin.connect()
+      assert.equal(plugin.prefix, 'example.red.')
     })
 
     it('gets the ledger\'s prefix when available', function * () {
@@ -194,11 +175,11 @@ describe('Info methods', function () {
         cloneDeep(require('./data/infoRedLedger.json')),
         { ilp_prefix: 'example.blue.' }
       )
-      const nockInfo = nock('http://blue.example')
+      nock('http://blue.example')
         .get('/')
         .reply(200, infoRedLedger)
 
-      const nockAccount = nock('http://blue.example')
+      nock('http://blue.example')
         .get('/accounts/mike')
         .reply(200, {
           ledger: 'http://blue.example',
@@ -208,27 +189,23 @@ describe('Info methods', function () {
       this.wsRedLedger = new wsHelper.Server('ws://blue.example/accounts/mike/transfers')
 
       yield plugin.connect()
-      yield assertResolve(plugin.getPrefix(), 'example.blue.')
+      yield assert.isFulfilled(plugin.getPrefix(), 'example.blue.')
       yield plugin.disconnect()
-      nockInfo.done()
-      nockAccount.done()
     })
   })
 
   describe('getAccount', function () {
     it('returns the plugin\'s account', function * () {
-      yield assertResolve(this.plugin.getAccount(), 'example.red.mike')
+      yield assert.isFulfilled(this.plugin.getAccount(), 'example.red.mike')
     })
 
-    it('fails without any prefix', function (done) {
+    it('fails without any prefix', function () {
       const plugin = new PluginBells({
         // no prefix
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      plugin.getAccount().should.be
-        .rejectedWith('Must be connected before getAccount can be called')
-        .notify(done)
+      return assert.isRejected(plugin.getAccount(), /Error: Must be connected before getAccount can be called/)
     })
   })
 
@@ -238,22 +215,16 @@ describe('Info methods', function () {
         .get('/accounts/mike')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200, {balance: '100'})
-      yield assertResolve(this.plugin.getBalance(), '100')
+      yield assert.isFulfilled(this.plugin.getBalance(), '100')
     })
 
-    it('throws an ExternalError on 500', function (done) {
+    it('throws an ExternalError on 500', function () {
       nock('http://red.example')
         .get('/accounts/mike')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(500)
-      this.plugin.getBalance().should.be
-        .rejectedWith('Unable to determine current balance')
-        .notify(done)
+      return assert.isRejected(this.plugin.getBalance(), /Error: Unable to determine current balance/)
     })
   })
 })
 
-function * assertResolve (promise, expected) {
-  assert(promise instanceof Promise)
-  assert.deepEqual(yield promise, expected)
-}

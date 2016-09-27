@@ -46,7 +46,7 @@ describe('Connection methods', function () {
         .get('/')
         .reply(200, this.infoRedLedger)
 
-      yield assertResolve(this.plugin.connect(), null)
+      yield assert.isFulfilled(this.plugin.connect(), null, 'should be fulfilled with null')
       assert.isTrue(this.plugin.isConnected())
     })
 
@@ -83,17 +83,12 @@ describe('Connection methods', function () {
       nockInfo.done()
     })
 
-    it('fails if the response is invalid', function (done) {
+    it('fails if the response is invalid', function () {
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, { name: 'mike' })
 
-      this.plugin.connect().should.be
-        .rejectedWith('Failed to resolve ledger URI from account URI')
-        .notify(() => {
-          assert.isFalse(this.plugin.isConnected())
-          done()
-        })
+      return assert.isRejected(this.plugin.connect(), /Error: Failed to resolve ledger URI from account URI/)
     })
 
     it('should set the username based on the account name returned', function * () {
@@ -157,7 +152,7 @@ describe('Connection methods', function () {
         .get('/')
         .reply(200, Object.assign({}, this.infoRedLedger, {urls: null}))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include a urls map')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata does not include a urls map')
     })
 
     it('should reject if the ledger metadata does not include transfer url', function * () {
@@ -175,7 +170,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer url')
     })
 
     it('should reject if the ledger metadata transfer url is not a full http url', function * () {
@@ -193,7 +188,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata transfer url must be a full http(s) url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata transfer url must be a full http(s) url')
     })
 
     it('should reject if the ledger metadata does not include transfer_fulfillment url', function * () {
@@ -211,7 +206,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer_fulfillment url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer_fulfillment url')
     })
 
     it('should reject if the ledger metadata transfer_fulfillment url is not a full http url', function * () {
@@ -229,7 +224,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata transfer_fulfillment url must be a full http(s) url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata transfer_fulfillment url must be a full http(s) url')
     })
 
     it('should reject if the ledger metadata does not include transfer_rejection url', function * () {
@@ -247,7 +242,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer_rejection url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata does not include transfer_rejection url')
     })
 
     it('should reject if the ledger metadata transfer_rejection url is not a full http url', function * () {
@@ -265,7 +260,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata transfer_rejection url must be a full http(s) url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata transfer_rejection url must be a full http(s) url')
     })
 
     it('should reject if the ledger metadata does not include account url', function * () {
@@ -283,7 +278,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include account url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata does not include account url')
     })
 
     it('should reject if the ledger metadata account url is not a full http url', function * () {
@@ -301,7 +296,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata account url must be a full http(s) url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata account url must be a full http(s) url')
     })
 
     it('should reject if the ledger metadata does not include account_transfers url', function * () {
@@ -319,7 +314,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata does not include account_transfers url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata does not include account_transfers url')
     })
 
     it('should reject if the ledger metadata account_transfers url is not a full ws url', function * () {
@@ -337,7 +332,7 @@ describe('Connection methods', function () {
           }
         }))
 
-      yield assertRejectsWith(this.plugin.connect(), ExternalError, 'ledger metadata account_transfers url must be a full ws(s) url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata account_transfers url must be a full ws(s) url')
     })
 
     it('should subscribe to notifications using the account_transfers websocket url', function * () {
@@ -391,17 +386,13 @@ describe('Connection methods', function () {
       wsRedLedger.stop()
     })
 
-    it('doesn\'t retry if account is nonexistant', function (done) {
+    it('doesn\'t retry if account is nonexistant', function () {
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(404)
 
-      this.plugin.connect().should.be
-        .rejectedWith('Failed to resolve ledger URI from account URI')
-        .notify(() => {
-          assert.isFalse(this.plugin.isConnected())
-          done()
-        })
+      return assert.isRejected(this.plugin.connect(),
+        /Error: Failed to resolve ledger URI from account URI/)
     })
 
     describe('a connector', function () {
@@ -430,25 +421,20 @@ describe('Connection methods', function () {
         nockInfo.done()
       })
 
-      it('throws an ExternalError if unable to set the connector field', function (done) {
+      it('throws an ExternalError if unable to set the connector field', function () {
         nock('http://red.example')
           .get('/accounts/mike')
           .reply(200, { ledger: 'http://red.example', name: 'mike' })
           .put('/accounts/mike', { name: 'mike', connector: 'http://mark.example' })
           .reply(500)
-        this.plugin.connect().should.be
-          .rejectedWith('Remote error: status=500')
-          .notify(done)
+        return assert.isRejected(this.plugin.connect(), /Error: Remote error: status=500/)
       })
     })
   })
 
   describe('getAccount (not connected)', function () {
-    it('throws if not connected', function (done) {
-      this.plugin.getAccount().catch(function (err) {
-        assert.equal(err.message, 'Must be connected before getAccount can be called')
-        done()
-      })
+    it('throws if not connected', function * () {
+      return assert.isRejected(this.plugin.getAccount(), /Error: Must be connected before getAccount can be called/)
     })
   })
 
@@ -469,29 +455,11 @@ describe('Connection methods', function () {
     })
 
     it('closes the connection', function * () {
-      yield assertResolve(this.plugin.disconnect(), null)
+      yield assert.isFulfilled(this.plugin.disconnect(), null, 'should be fulfilled with null')
       assert.isFalse(this.plugin.isConnected())
       // A second time does nothing.
-      yield assertResolve(this.plugin.disconnect(), null)
+      yield assert.isFulfilled(this.plugin.disconnect(), null, 'should be fulfilled with null')
     })
   })
 })
-
-function * assertResolve (promise, expected) {
-  assert(promise instanceof Promise)
-  assert.deepEqual(yield promise, expected)
-}
-
-function * assertRejectsWith (promise, errorConstructor, errorMessage) {
-  assert(promise instanceof Promise)
-  let error
-  try {
-    yield promise
-  } catch (e) {
-    error = e
-  }
-  assert.ok(error, 'promise did not reject')
-  assert.instanceOf(error, errorConstructor)
-  assert.equal(error.message, errorMessage)
-}
 

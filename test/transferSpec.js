@@ -67,7 +67,7 @@ describe('Transfer methods', function () {
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', this.ledgerTransfer)
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200)
-      yield assertResolve(this.plugin.send(this.transfer), null)
+      yield assert.isFulfilled(this.plugin.send(this.transfer), null)
     })
 
     it('should use the transfer url from the ledger metadata', function * () {
@@ -292,7 +292,7 @@ describe('Transfer methods', function () {
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(201)
-      yield assertResolve(this.plugin.fulfillCondition(
+      yield assert.isFulfilled(this.plugin.fulfillCondition(
         '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         'cf:0:ZXhlY3V0ZQ'), null)
     })
@@ -327,7 +327,7 @@ describe('Transfer methods', function () {
       })
       yield plugin.connect()
 
-      yield assertResolve(plugin.fulfillCondition(
+      yield assert.isFulfilled(plugin.fulfillCondition(
         '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         'cf:0:ZXhlY3V0ZQ'), null)
 
@@ -335,16 +335,13 @@ describe('Transfer methods', function () {
       fulfillmentNock.done()
     })
 
-    it('throws an ExternalError on 500', function (done) {
+    it('throws an ExternalError on 500', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(500)
-      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ')
-        .should.be.rejectedWith('Failed to submit fulfillment for' +
-          ' transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c' +
-          ' Error: undefined')
-        .notify(done)
+      return assert.isRejected(this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ'),
+        /ExternalError: Failed to submit fulfillment for transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c Error: undefined/)
     })
   })
 
@@ -354,7 +351,7 @@ describe('Transfer methods', function () {
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200, 'cf:0:ZXhlY3V0ZQ')
-      yield assertResolve(
+      yield assert.isFulfilled(
         this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
         'cf:0:ZXhlY3V0ZQ')
     })
@@ -367,13 +364,7 @@ describe('Transfer methods', function () {
           id: 'TransferNotFoundError',
           message: 'This transfer does not exist'
         })
-      try {
-        yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
-      } catch (err) {
-        assert.equal(err.name, 'TransferNotFoundError')
-        return
-      }
-      assert(false)
+      return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), errors.TransferNotFoundError)
     })
 
     it('throws MissingFulfillmentError', function * () {
@@ -384,13 +375,7 @@ describe('Transfer methods', function () {
           id: 'MissingFulfillmentError',
           message: 'This transfer has no fulfillment'
         })
-      try {
-        yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
-      } catch (err) {
-        assert.equal(err.name, 'MissingFulfillmentError')
-        return
-      }
-      assert(false)
+      return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), errors.MissingFulfillmentError)
     })
 
     it('throws an ExternalError on 500', function * () {
@@ -398,14 +383,7 @@ describe('Transfer methods', function () {
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(500)
-      try {
-        yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
-      } catch (err) {
-        assert.equal(err.name, 'ExternalError')
-        assert.equal(err.message, 'Remote error: status=500')
-        return
-      }
-      assert(false)
+      return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), /ExternalError: Remote error: status=500/)
     })
 
     it('throws an ExternalError on error', function * () {
@@ -413,14 +391,7 @@ describe('Transfer methods', function () {
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
         .basicAuth({user: 'mike', pass: 'mike'})
         .replyWithError('broken')
-      try {
-        yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
-      } catch (err) {
-        assert.equal(err.name, 'ExternalError')
-        assert.equal(err.message, 'Remote error: message=broken')
-        return
-      }
-      assert(false)
+      return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), /ExternalError: Remote error: message=broken/)
     })
   })
 
@@ -429,50 +400,39 @@ describe('Transfer methods', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(200, {whatever: true})
-      yield assertResolve(
+      yield assert.isFulfilled(
         this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'),
-        null)
+        null,
+        'should resolve to null')
     })
 
-    it('throws NotAcceptedError on UnauthorizedError', function (done) {
+    it('throws NotAcceptedError on UnauthorizedError', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(422, {id: 'UnauthorizedError', message: 'error'})
-      this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
-        .should.be.rejectedWith(errors.NotAcceptedError, 'error')
-        .notify(done)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /NotAcceptedError: error/)
     })
 
-    it('throws TransferNotFoundError on NotFoundError', function (done) {
+    it('throws TransferNotFoundError on NotFoundError', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(404, {id: 'NotFoundError', message: 'error'})
-      this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
-        .should.be.rejectedWith(errors.TransferNotFoundError, 'error')
-        .notify(done)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /TransferNotFoundError: error/)
     })
 
-    it('throws AlreadyFulfilledError on InvalidModificationError', function (done) {
+    it('throws AlreadyFulfilledError on InvalidModificationError', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(404, {id: 'InvalidModificationError', message: 'error'})
-      this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
-        .should.be.rejectedWith(errors.AlreadyFulfilledError, 'error')
-        .notify(done)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /AlreadyFulfilledError: error/)
     })
 
-    it('throws ExternalError on 500', function (done) {
+    it('throws ExternalError on 500', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(500)
-      this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!')
-        .should.be.rejectedWith('Remote error: status=500')
-        .notify(done)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /ExternalError: Remote error: status=500/)
     })
   })
 })
 
-function * assertResolve (promise, expected) {
-  assert(promise instanceof Promise)
-  assert.deepEqual(yield promise, expected)
-}
