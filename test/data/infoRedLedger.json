@@ -11,6 +11,14 @@
   "currency_code": "USD",
   "currency_symbol": "$",
   "urls": {
-    "account": "http://red.example/accounts/:name"
+    "health": "http://red.example/health",
+    "transfer": "http://red.example/transfers/:id",
+    "transfer_fulfillment": "http://red.example/transfers/:id/fulfillment",
+    "transfer_rejection": "http://red.example/transfers/:id/rejection",
+    "transfer_state": "http://red.example/transfers/:id/state",
+    "connectors": "http://red.example/connectors",
+    "accounts": "http://red.example/accounts",
+    "account": "http://red.example/accounts/:name",
+    "account_transfers": "ws://red.example/accounts/:name/transfers"
   }
 }
