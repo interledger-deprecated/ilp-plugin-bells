@@ -116,21 +116,6 @@ class FiveBellsLedger extends EventEmitter2 {
       this.credentials.username = res.body.name
     }
 
-    if (!res.body.connector && this.connector) {
-      const res2 = yield this._request({
-        uri: accountUri,
-        method: 'put',
-        body: {
-          name: res.body.name,
-          connector: this.connector
-        }
-      })
-
-      if (!res2 || res2.statusCode !== 200) {
-        throw new Error('Unable to set connector URI')
-      }
-    }
-
     // Resolve ledger metadata
     const ledgerMetadata = yield this._fetchLedgerMetadata()
     this.urls = parseAndValidateLedgerUrls(ledgerMetadata.urls)
@@ -172,8 +157,14 @@ class FiveBellsLedger extends EventEmitter2 {
           resolve(null)
         })
         ws.on('message', (msg) => {
-          const notification = JSON.parse(msg)
-          debug('notify transfer', notification.resource.state, notification.resource.id)
+          let notification
+          try {
+            notification = JSON.parse(msg)
+            debug('notify transfer', notification.resource.state, notification.resource.id)
+          } catch (err) {
+            debug('invalid notification', msg)
+            return
+          }
 
           co.wrap(this._handleNotification)
             .call(this, notification.resource, notification.related_resources)
@@ -598,7 +589,10 @@ class FiveBellsLedger extends EventEmitter2 {
       opts))
     // TODO for source transfers: handle this so we actually get our money back
     if (transferRes.statusCode >= 400) {
-      const error = new ExternalError('Remote error: status=' + transferRes.statusCode)
+      const error = new ExternalError('Remote error:' +
+        ' uri=' + opts.uri +
+        ' status=' + transferRes.statusCode +
+        ' body=' + JSON.stringify(transferRes.body))
       error.status = transferRes.statusCode
       error.response = transferRes
       throw error

@@ -394,42 +394,6 @@ describe('Connection methods', function () {
       return assert.isRejected(this.plugin.connect(),
         /Error: Failed to resolve ledger URI from account URI/)
     })
-
-    describe('a connector', function () {
-      beforeEach(function () {
-        this.plugin = new PluginBells({
-          connector: 'http://mark.example',
-          prefix: 'example.red.',
-          account: 'http://red.example/accounts/mike',
-          password: 'mike'
-        })
-      })
-
-      it('sets the connector field', function * () {
-        nock('http://red.example')
-          .get('/accounts/mike')
-          .reply(200, { ledger: 'http://red.example', name: 'mike' })
-          .put('/accounts/mike', { name: 'mike', connector: 'http://mark.example' })
-          .reply(200)
-
-        const nockInfo = nock('http://red.example')
-          .get('/')
-          .reply(200, this.infoRedLedger)
-
-        yield this.plugin.connect()
-
-        nockInfo.done()
-      })
-
-      it('throws an ExternalError if unable to set the connector field', function () {
-        nock('http://red.example')
-          .get('/accounts/mike')
-          .reply(200, { ledger: 'http://red.example', name: 'mike' })
-          .put('/accounts/mike', { name: 'mike', connector: 'http://mark.example' })
-          .reply(500)
-        return assert.isRejected(this.plugin.connect(), /Error: Remote error: status=500/)
-      })
-    })
   })
 
   describe('getAccount (not connected)', function () {

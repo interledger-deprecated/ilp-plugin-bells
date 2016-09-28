@@ -131,6 +131,16 @@ describe('Notification handling', function () {
     })
   })
 
+  describe('notifications with an invalid format', function () {
+    it('ignores a notification without a "resource"', function () {
+      this.wsRedLedger.send('{}')
+    })
+
+    it('ignores a notification with invalid JSON', function () {
+      this.wsRedLedger.send('{')
+    })
+  })
+
   describe('notification of timeout', function () {
     it('should handle a rejected transfer to mike', function * () {
       this.wsRedLedger.send(JSON.stringify({
