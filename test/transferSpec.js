@@ -106,6 +106,19 @@ describe('Transfer methods', function () {
       transferNock.done()
     })
 
+    it('should not send any null or undefined values', function * () {
+      nock('http://red.example')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', (transfer) => {
+          return !transfer.hasOwnProperty('execution_condition') && !transfer.hasOwnProperty('cancellation_condition')
+        })
+        .basicAuth({user: 'mike', pass: 'mike'})
+        .reply(200)
+      yield assert.isFulfilled(this.plugin.send(_.assign(this.transfer, {
+        executionCondition: null,
+        cancellationCondition: undefined
+      })), null)
+    })
+
     it('throws InvalidFieldsError for missing account', function (done) {
       this.plugin.send({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
