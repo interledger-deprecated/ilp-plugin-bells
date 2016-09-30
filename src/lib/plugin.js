@@ -11,8 +11,8 @@ const ExternalError = require('../errors/external-error')
 const UnrelatedNotificationError = require('../errors/unrelated-notification-error')
 const UnreachableError = require('../errors/unreachable-error')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
-const isUndefined = require('lodash/fp/isUndefined')
-const omitUndefined = require('lodash/fp/omitBy')(isUndefined)
+const isNil = require('lodash/fp/isNil')
+const omitNil = require('lodash/fp/omitBy')(isNil)
 const startsWith = require('lodash/fp/startsWith')
 const find = require('lodash/find')
 
@@ -147,7 +147,7 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     const reconnect = reconnectCore(() => {
-      return new WebSocket(notificationsUrl, omitUndefined(options))
+      return new WebSocket(notificationsUrl, omitNil(options))
     })
 
     return new Promise((resolve, reject) => {
@@ -321,16 +321,16 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     const sourceAddress = yield this.parseAddress(transfer.account)
-    const fiveBellsTransfer = omitUndefined({
+    const fiveBellsTransfer = omitNil({
       id: this.urls.transfer.replace(':id', transfer.id),
       ledger: this.host,
-      debits: [omitUndefined({
+      debits: [omitNil({
         account: this.credentials.account,
         amount: transfer.amount,
         authorized: true,
         memo: transfer.noteToSelf
       })],
-      credits: [omitUndefined({
+      credits: [omitNil({
         account: this.urls.account.replace(':name', encodeURIComponent(sourceAddress.username)),
         amount: transfer.amount,
         memo: transfer.data
@@ -482,7 +482,7 @@ class FiveBellsLedger extends EventEmitter2 {
       if (credit.account === this.credentials.account) {
         handled = true
 
-        const transfer = omitUndefined({
+        const transfer = omitNil({
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'incoming',
           // TODO: What if there are multiple debits?
@@ -535,7 +535,7 @@ class FiveBellsLedger extends EventEmitter2 {
         // should never be more than one credit.
         const credit = fiveBellsTransfer.credits[0]
 
-        const transfer = omitUndefined({
+        const transfer = omitNil({
           id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
           direction: 'outgoing',
           account: this.prefix + this.accountUriToName(credit.account),
@@ -635,7 +635,7 @@ class FiveBellsLedger extends EventEmitter2 {
 }
 
 function requestCredentials (credentials) {
-  return omitUndefined({
+  return omitNil({
     auth: credentials.username && credentials.password && {
       user: credentials.username,
       pass: credentials.password
