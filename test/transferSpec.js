@@ -297,6 +297,19 @@ describe('Transfer methods', function () {
         'cf:0:ZXhlY3V0ZQ'), null)
     })
 
+    it('sets the content type to text/plain', function * () {
+      nock('http://red.example', {
+        reqheaders: {
+          'content-type': 'text/plain'
+        }
+      })
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
+        .reply(201)
+      yield assert.isFulfilled(this.plugin.fulfillCondition(
+        '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+        'cf:0:ZXhlY3V0ZQ'), null)
+    })
+
     it('should use the transfer_fulfillment url from the ledger metadata', function * () {
       nock.removeInterceptor(this.nockInfo)
       nock('http://red.example')

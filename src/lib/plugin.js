@@ -358,7 +358,7 @@ class FiveBellsLedger extends EventEmitter2 {
       }
     }
 
-    debug('submitting transfer:', fiveBellsTransfer)
+    debug('submitting transfer: ', JSON.stringify(fiveBellsTransfer))
 
     const sendRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
@@ -369,6 +369,7 @@ class FiveBellsLedger extends EventEmitter2 {
       }))
     const body = sendRes.body
     if (sendRes.statusCode >= 400) {
+      debug('error submitting transfer:', sendRes.statusCode, JSON.stringify(body))
       if (body.id === 'InvalidBodyError') throw new errors.InvalidFieldsError(body.message)
       if (body.id === 'InvalidModificationError') throw new errors.DuplicateIdError(body.message)
       throw new errors.NotAcceptedError(body.message)
@@ -388,7 +389,10 @@ class FiveBellsLedger extends EventEmitter2 {
       requestCredentials(this.credentials), {
         method: 'put',
         uri: this.urls.transfer_fulfillment.replace(':id', transferId),
-        body: conditionFulfillment
+        body: conditionFulfillment,
+        headers: {
+          'content-type': 'text/plain'
+        }
       }))
     const body = getResponseJSON(fulfillmentRes)
 
