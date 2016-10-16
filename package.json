@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/interledger/js-ilp-plugin-bells.git"
+    "url": "git+https://github.com/interledgerjs/ilp-plugin-bells.git"
   },
   "keywords": [
     "five-bells",
@@ -24,9 +24,9 @@
   "author": "Interledger Team <info@interledger.org>",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/interledger/js-ilp-plugin-bells/issues"
+    "url": "https://github.com/interledgerjs/ilp-plugin-bells/issues"
   },
-  "homepage": "https://github.com/interledger/js-ilp-plugin-bells#readme",
+  "homepage": "https://github.com/interledgerjs/ilp-plugin-bells#readme",
   "devDependencies": {
     "chai": "^3.5.0",
     "chai-as-promised": "^5.3.0",
