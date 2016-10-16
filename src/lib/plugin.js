@@ -408,7 +408,7 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     // TODO check the timestamp the ledger sends back
-    // See https://github.com/interledger/five-bells-ledger/issues/149
+    // See https://github.com/interledgerjs/five-bells-ledger/issues/149
     if (fulfillmentRes.statusCode === 200 || fulfillmentRes.statusCode === 201) {
       return null
     } else {

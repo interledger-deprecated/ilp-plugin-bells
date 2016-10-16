@@ -7,7 +7,7 @@
 [codecov-image]: https://codecov.io/gh/interledgerjs/ilp-plugin-bells/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/interledgerjs/ilp-plugin-bells
 
-> ILP ledger plugin for [five-bells-ledger](https://github.com/interledger/five-bells-ledger)
+> ILP ledger plugin for [five-bells-ledger](https://github.com/interledgerjs/five-bells-ledger)
 
 ## Installation
 
