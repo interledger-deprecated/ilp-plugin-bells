@@ -54,11 +54,13 @@ describe('Notification handling', function () {
     this.stubFulfillExecutionCondition = sinon.stub()
     this.stubIncomingCancel = sinon.stub()
     this.stubOutgoingCancel = sinon.stub()
+    this.stubIncomingMessage = sinon.stub()
 
     this.plugin.on('incoming_cancel', this.stubIncomingCancel)
     this.plugin.on('outgoing_cancel', this.stubOutgoingCancel)
     this.plugin.on('incoming_prepare', this.stubReceive)
     this.plugin.on('outgoing_fulfill', this.stubFulfillExecutionCondition)
+    this.plugin.on('incoming_message', this.stubIncomingMessage)
 
     this.fiveBellsTransferMike = {
       id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
@@ -94,6 +96,13 @@ describe('Notification handling', function () {
       amount: '10',
       expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
     }
+
+    this.fiveBellsMessage = cloneDeep(require('./data/message.json'))
+    this.message = {
+      ledger: 'example.red.',
+      account: 'example.red.alice',
+      data: {foo: 'bar'}
+    }
   })
 
   afterEach(function * () {
@@ -101,8 +110,8 @@ describe('Notification handling', function () {
     assert(nock.isDone(), 'all nocks should be called')
   })
 
-  describe('notifications of unrelated transfers', function () {
-    it('emits an UnrelatedNotificationError for an unrelated notification', function (done) {
+  describe('unrelated notifications', function () {
+    it('emits an UnrelatedNotificationError for an unrelated transfer', function (done) {
       this.wsRedLedger.on('message', function (message) {
         assert.deepEqual(JSON.parse(message), {
           result: 'ignored',
@@ -114,6 +123,7 @@ describe('Notification handling', function () {
         done()
       })
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: {
           id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
           ledger: 'http://red.example',
@@ -129,10 +139,30 @@ describe('Notification handling', function () {
         }
       }))
     })
+
+    it('emits an UnrelatedNotificationError for an unrelated message', function (done) {
+      this.wsRedLedger.on('message', function (message) {
+        assert.deepEqual(JSON.parse(message), {
+          result: 'ignored',
+          ignoreReason: {
+            id: 'UnrelatedNotificationError',
+            message: 'Notification does not seem related to connector'
+          }
+        })
+        done()
+      })
+      this.wsRedLedger.send(JSON.stringify({
+        type: 'message',
+        resource: {
+          ledger: 'http://blue.example',
+          account: 'http://red.example/accounts/alice'
+        }
+      }))
+    })
   })
 
   describe('notifications with an invalid format', function () {
-    it('ignores a notification without a "resource"', function () {
+    it('ignores a notification without a "type"', function () {
       this.wsRedLedger.send('{}')
     })
 
@@ -144,6 +174,7 @@ describe('Notification handling', function () {
   describe('notification of timeout', function () {
     it('should handle a rejected transfer to mike', function * () {
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: Object.assign(this.fiveBellsTransferAlice, {
           execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
         }),
@@ -161,6 +192,7 @@ describe('Notification handling', function () {
 
     it('should handle a rejected transfer to alice', function * () {
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: Object.assign(this.fiveBellsTransferMike, {
           execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
         }),
@@ -219,6 +251,7 @@ describe('Notification handling', function () {
 
     it('should emit "incoming_reject" with the rejection_message', function * () {
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: Object.assign(this.fiveBellsTransferExecuted, {
           state: 'rejected',
           credits: [
@@ -243,6 +276,7 @@ describe('Notification handling', function () {
       this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
       this.fiveBellsTransferExecuted.state = 'prepared'
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: this.fiveBellsTransferExecuted
       }))
 
@@ -256,6 +290,7 @@ describe('Notification handling', function () {
     it('should pass on incoming executed transfers', function * () {
       this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: this.fiveBellsTransferExecuted
       }))
 
@@ -272,6 +307,7 @@ describe('Notification handling', function () {
         amount: '10'
       })
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: this.fiveBellsTransferExecuted
       }))
 
@@ -323,6 +359,7 @@ describe('Notification handling', function () {
 
     it('should emit outgoing_cancel with the rejection_message', function * () {
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: Object.assign(this.fiveBellsTransferExecuted, {
           state: 'rejected',
           credits: [
@@ -347,6 +384,7 @@ describe('Notification handling', function () {
       this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
       this.fiveBellsTransferExecuted.state = 'prepared'
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: this.fiveBellsTransferExecuted
       }))
 
@@ -360,6 +398,7 @@ describe('Notification handling', function () {
     it('be notified of an outgoing execute', function * () {
       this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
       this.wsRedLedger.send(JSON.stringify({
+        type: 'transfer',
         resource: this.fiveBellsTransferExecuted
       }))
 
@@ -370,10 +409,50 @@ describe('Notification handling', function () {
       }))
     })
   })
+
+  describe('notifications of incoming messages', function () {
+    it('emits "incoming_message"', function * () {
+      this.wsRedLedger.send(JSON.stringify({
+        type: 'message',
+        resource: this.fiveBellsMessage
+      }))
+
+      yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
+      sinon.assert.calledOnce(this.stubIncomingMessage)
+      sinon.assert.calledWith(this.stubIncomingMessage, this.message)
+    })
+  })
+
+  describe('notification of "connect"', function () {
+    it('accepts the notification', function (done) {
+      this.wsRedLedger.on('message', function (message) {
+        assert.deepEqual(JSON.parse(message), { result: 'processed' })
+        done()
+      })
+      this.wsRedLedger.send(JSON.stringify({ type: 'connect' }))
+    })
+  })
+
+  describe('notification with an unknown "type"', function () {
+    it('ignores the notification', function (done) {
+      this.wsRedLedger.on('message', function (message) {
+        assert.deepEqual(JSON.parse(message), {
+          result: 'ignored',
+          ignoreReason: {
+            id: 'UnrelatedNotificationError',
+            message: 'Invalid notification type: random'
+          }
+        })
+        done()
+      })
+      this.wsRedLedger.send(JSON.stringify({ type: 'random' }))
+    })
+  })
 })
 
 function * itEmitsFulfillExecutionCondition () {
   this.wsRedLedger.send(JSON.stringify({
+    type: 'transfer',
     resource: Object.assign(this.fiveBellsTransferExecuted, {
       execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
     }),
@@ -394,6 +473,7 @@ function * itEmitsFulfillExecutionCondition () {
 
 function * itEmitsFulfillCancellationCondition () {
   this.wsRedLedger.send(JSON.stringify({
+    type: 'transfer',
     resource: Object.assign(this.fiveBellsTransferExecuted, {
       state: 'rejected',
       cancellation_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'

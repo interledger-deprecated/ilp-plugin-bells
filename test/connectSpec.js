@@ -123,7 +123,8 @@ describe('Connection methods', function () {
         'connectors': 'http://other.example/',
         'accounts': 'http://thing.example/a',
         'account': 'http://red.example/accounts/:name',
-        'account_transfers': 'ws://red.example/accounts/:name/transfers'
+        'account_transfers': 'ws://red.example/accounts/:name/transfers',
+        'message': 'http://red.example/messages'
       }
       const infoNock = nock('http://red.example')
         .get('/')
@@ -135,7 +136,8 @@ describe('Connection methods', function () {
         'transfer_fulfillment',
         'transfer_rejection',
         'account',
-        'account_transfers'
+        'account_transfers',
+        'message'
       ]), 'urls should be set from metadata')
       accountNock.done()
       infoNock.done()

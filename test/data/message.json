@@ -1,0 +1,5 @@
+{
+  "ledger": "http://red.example",
+  "account": "http://red.example/accounts/alice",
+  "data": { "foo": "bar" }
+}

@@ -19,7 +19,7 @@ const find = require('lodash/find')
 const backoffMin = 1000
 const backoffMax = 30000
 
-const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'account_transfers' ]
+const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'account_transfers', 'message' ]
 
 function wait (ms) {
   return function (done) {
@@ -160,14 +160,13 @@ class FiveBellsLedger extends EventEmitter2 {
           let notification
           try {
             notification = JSON.parse(msg)
-            debug('notify transfer', notification.resource.state, notification.resource.id)
           } catch (err) {
             debug('invalid notification', msg)
             return
           }
 
           co.wrap(this._handleNotification)
-            .call(this, notification.resource, notification.related_resources)
+            .call(this, notification.type, notification.resource, notification.related_resources)
             .then(() => {
               if (this.debugReplyNotifications) {
                 ws.send(JSON.stringify({ result: 'processed' }))
@@ -193,7 +192,9 @@ class FiveBellsLedger extends EventEmitter2 {
         })
         ws.on('close', () => {
           debug('ws disconnected from ' + notificationsUrl)
-          reject(new UnreachableError('websocket connection error'))
+          if (this.connected) {
+            reject(new UnreachableError('websocket connection error'))
+          }
         })
 
         // reconnect-core expects the disconnect method to be called: `end`
@@ -288,6 +289,9 @@ class FiveBellsLedger extends EventEmitter2 {
     // validator.validate('TransferTemplate', transfer)
   }
 
+  _validateMessage (message) {
+  }
+
   getBalance () {
     return co.wrap(this._getBalance).call(this)
   }
@@ -308,11 +312,56 @@ class FiveBellsLedger extends EventEmitter2 {
     return res.body.balance
   }
 
-  send (transfer) {
-    return co.wrap(this._send).call(this, transfer)
+  /**
+   * @param {Object} message
+   * @param {IlpAddress} message.account
+   * @param {IlpAddress} message.ledger
+   * @param {Object} message.data
+   * @param {Object} message.custom (optional)
+   * @returns {Promise.<null>}
+   */
+  sendMessage (message) {
+    return co.wrap(this._sendMessage).call(this, message)
   }
 
-  * _send (transfer) {
+  * _sendMessage (message) {
+    if (message.ledger !== this.prefix) {
+      throw new errors.InvalidFieldsError('invalid ledger')
+    }
+    if (typeof message.account !== 'string') {
+      throw new errors.InvalidFieldsError('invalid account')
+    }
+    if (typeof message.data !== 'object') {
+      throw new errors.InvalidFieldsError('invalid data')
+    }
+
+    const destinationAddress = yield this.parseAddress(message.account)
+    const fiveBellsMessage = {
+      ledger: this.host,
+      account: this.urls.account.replace(':name', encodeURIComponent(destinationAddress.username)),
+      data: message.data
+    }
+
+    const sendRes = yield request(Object.assign(
+      requestCredentials(this.credentials), {
+        method: 'post',
+        uri: this.urls.message,
+        body: fiveBellsMessage,
+        json: true
+      }))
+    const body = sendRes.body
+    if (sendRes.statusCode >= 400) {
+      if (body.id === 'InvalidBodyError') throw new errors.InvalidFieldsError(body.message)
+      throw new errors.NotAcceptedError(body.message)
+    }
+    return null
+  }
+
+  sendTransfer (transfer) {
+    return co.wrap(this._sendTransfer).call(this, transfer)
+  }
+
+  * _sendTransfer (transfer) {
     if (typeof transfer.account !== 'string') {
       throw new errors.InvalidFieldsError('invalid account')
     }
@@ -474,7 +523,21 @@ class FiveBellsLedger extends EventEmitter2 {
     return null
   }
 
-  * _handleNotification (fiveBellsTransfer, relatedResources) {
+  * _handleNotification (type, data, relatedResources) {
+    if (type === 'connect') {
+      debug('notify connect')
+    } else if (type === 'transfer') {
+      debug('notify transfer', data.state, data.id)
+      return yield this._handleTransferNotification(data, relatedResources)
+    } else if (type === 'message') {
+      debug('notify message', data.account)
+      return yield this._handleMessageNotification(data)
+    } else {
+      throw new UnrelatedNotificationError('Invalid notification type: ' + type)
+    }
+  }
+
+  * _handleTransferNotification (fiveBellsTransfer, relatedResources) {
     this._validateTransfer(fiveBellsTransfer)
 
     let handled = false
@@ -584,24 +647,16 @@ class FiveBellsLedger extends EventEmitter2 {
     }
   }
 
-  * _request (opts) {
-    // TODO: check before this point that we actually have
-    // credentials for the ledgers we're asked to settle between
-    const transferRes = yield request(Object.assign(
-      {json: true},
-      requestCredentials(this.credentials),
-      opts))
-    // TODO for source transfers: handle this so we actually get our money back
-    if (transferRes.statusCode >= 400) {
-      const error = new ExternalError('Remote error:' +
-        ' uri=' + opts.uri +
-        ' status=' + transferRes.statusCode +
-        ' body=' + JSON.stringify(transferRes.body))
-      error.status = transferRes.statusCode
-      error.response = transferRes
-      throw error
+  _handleMessageNotification (message) {
+    this._validateMessage(message)
+    if (message.ledger !== this.host) {
+      throw new UnrelatedNotificationError('Notification does not seem related to connector')
     }
-    return transferRes
+    return this.emitAsync('incoming_message', {
+      ledger: this.prefix,
+      account: this.prefix + this.accountUriToName(message.account),
+      data: message.data
+    })
   }
 
   /**
