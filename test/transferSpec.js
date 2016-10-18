@@ -148,7 +148,7 @@ describe('Transfer methods', function () {
         amount: '123',
         noteToSelf: {source: 'something'},
         data: {foo: 'bar'}
-      }), /^Error: Destination address "red.alice" must start with ledger prefix "example.red."$/)
+      }), /^InvalidFieldsError: Destination address "red.alice" must start with ledger prefix "example.red."$/)
     })
 
     it('throws an InvalidFieldsError on InvalidBodyError', function (done) {

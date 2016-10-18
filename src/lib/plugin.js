@@ -676,7 +676,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
     if (!startsWith(prefix, address)) {
       debug('destination address has invalid prefix', { prefix, address })
-      throw new Error('Destination address "' + address + '" must start ' +
+      throw new errors.InvalidFieldsError('Destination address "' + address + '" must start ' +
         'with ledger prefix "' + prefix + '"')
     }
 
