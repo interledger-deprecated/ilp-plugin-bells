@@ -290,6 +290,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   _validateMessage (message) {
+    if (message.ledger !== this.host) {
+      throw new UnrelatedNotificationError('Notification does not seem related to connector')
+    }
   }
 
   getBalance () {
@@ -649,9 +652,6 @@ class FiveBellsLedger extends EventEmitter2 {
 
   _handleMessageNotification (message) {
     this._validateMessage(message)
-    if (message.ledger !== this.host) {
-      throw new UnrelatedNotificationError('Notification does not seem related to connector')
-    }
     return this.emitAsync('incoming_message', {
       ledger: this.prefix,
       account: this.prefix + this.accountUriToName(message.account),

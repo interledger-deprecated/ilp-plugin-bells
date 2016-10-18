@@ -113,7 +113,7 @@ describe('Transfer methods', function () {
         })
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200)
-      yield assert.isFulfilled(this.plugin.send(_.assign(this.transfer, {
+      yield assert.isFulfilled(this.plugin.sendTransfer(_.assign(this.transfer, {
         executionCondition: null,
         cancellationCondition: undefined
       })), null)
