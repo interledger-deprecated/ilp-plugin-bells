@@ -61,13 +61,13 @@ describe('Transfer methods', function () {
     assert(nock.isDone(), 'nocks should all have been called')
   })
 
-  describe('send', function () {
+  describe('sendTransfer', function () {
     it('submits a transfer', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', this.ledgerTransfer)
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200)
-      yield assert.isFulfilled(this.plugin.send(this.transfer), null)
+      yield assert.isFulfilled(this.plugin.sendTransfer(this.transfer), null)
     })
 
     it('should use the transfer url from the ledger metadata', function * () {
@@ -100,7 +100,7 @@ describe('Transfer methods', function () {
       })
       yield plugin.connect()
 
-      yield plugin.send(this.transfer)
+      yield plugin.sendTransfer(this.transfer)
 
       nockInfo.done()
       transferNock.done()
@@ -113,28 +113,28 @@ describe('Transfer methods', function () {
         })
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200)
-      yield assert.isFulfilled(this.plugin.send(_.assign(this.transfer, {
+      yield assert.isFulfilled(this.plugin.sendTransfer(_.assign(this.transfer, {
         executionCondition: null,
         cancellationCondition: undefined
       })), null)
     })
 
     it('throws InvalidFieldsError for missing account', function (done) {
-      this.plugin.send({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         amount: '1'
       }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid account').notify(done)
     })
 
     it('throws InvalidFieldsError for missing amount', function (done) {
-      this.plugin.send({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice'
       }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid amount').notify(done)
     })
 
     it('throws InvalidFieldsError for negative amount', function (done) {
-      this.plugin.send({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
         amount: '-1'
@@ -142,13 +142,13 @@ describe('Transfer methods', function () {
     })
 
     it('rejects a transfer when the destination does not begin with the correct prefix', function * () {
-      yield assert.isRejected(this.plugin.send({
+      yield assert.isRejected(this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'red.alice',
         amount: '123',
         noteToSelf: {source: 'something'},
         data: {foo: 'bar'}
-      }), /^Error: Destination address "red.alice" must start with ledger prefix "example.red."$/)
+      }), /^InvalidFieldsError: Destination address "red.alice" must start with ledger prefix "example.red."$/)
     })
 
     it('throws an InvalidFieldsError on InvalidBodyError', function (done) {
@@ -157,7 +157,7 @@ describe('Transfer methods', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(400, {id: 'InvalidBodyError', message: 'fail'})
 
-      this.plugin.send({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
         amount: '123'
@@ -170,7 +170,7 @@ describe('Transfer methods', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(400, {id: 'InvalidModificationError', message: 'fail'})
 
-      this.plugin.send({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
         amount: '123'
@@ -195,7 +195,7 @@ describe('Transfer methods', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(400, {id: 'SomeError', message: 'fail'})
 
-      this.plugin.send({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
         amount: '123'
@@ -224,7 +224,7 @@ describe('Transfer methods', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200)
 
-      yield this.plugin.send({
+      yield this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
         amount: '123',
@@ -237,7 +237,7 @@ describe('Transfer methods', function () {
         .post('/targets', ['http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment'])
         .reply(400)
 
-      this.plugin.send({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
         amount: '123',

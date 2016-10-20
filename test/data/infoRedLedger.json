@@ -19,6 +19,7 @@
     "connectors": "http://red.example/connectors",
     "accounts": "http://red.example/accounts",
     "account": "http://red.example/accounts/:name",
-    "account_transfers": "ws://red.example/accounts/:name/transfers"
+    "account_transfers": "ws://red.example/accounts/:name/transfers",
+    "message": "http://red.example/messages"
   }
 }
