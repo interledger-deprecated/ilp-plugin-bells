@@ -30,3 +30,31 @@ const client = new Client({
   }
 })
 ```
+
+ILP-Plugin-Bells can also be created via a factory, which allows many instances
+to share a single websocket connection:
+
+```js
+const Client = require('ilp').Client
+const PluginBellsFactory = require('ilp-plugin-bells').Factory
+
+// connects to the admin account and uses one websocket connection to subscribe
+// to all transfers and messages on the ledger
+
+const factory = new PluginBellsFactory({
+  adminUsername: 'admin',
+  adminPassword: 'admin',
+  adminAccount: 'https://red.ilpdemo.org/ledger/accounts/admin' 
+})
+
+factory.connect().then(() => {
+
+  // `create` will make a new, connected, PluginBells instance. If a plugin is already
+  // created for a given account, then the existing plugin is returned from `create`
+
+  const client = new Client(factory.create({
+    account: 'https://red.ilpdemo.org/ledger/accounts/alice'
+  })
+
+  // ...
+})
