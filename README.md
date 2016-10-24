@@ -32,7 +32,10 @@ const client = new Client({
 ```
 
 ILP-Plugin-Bells can also be created via a factory, which allows many instances
-to share a single websocket connection:
+to share a single websocket connection.
+
+**Note: this requires an admin account on a ledger. Otherwise the factory can't
+listen for events on all accounts.**
 
 ```js
 const Client = require('ilp').Client
@@ -52,9 +55,23 @@ factory.connect().then(() => {
   // `create` will make a new, connected, PluginBells instance. If a plugin is already
   // created for a given account, then the existing plugin is returned from `create`
 
-  const client = new Client(factory.create({
-    account: 'https://red.ilpdemo.org/ledger/accounts/alice'
-  })
+  const account = 'https://red.ilpdemo.org/ledger/accounts/alice'
+  const plugin = factory.create({ account })
+
+  const client = new Client(plugin)
+
+  // this call is uneccesary and will do nothing, because the plugin is already
+  // connected
+  plugin.connect()
+
+  // neither will this call; the plugin doesn't maintain its own connection,
+  // so it can't disconnect itself
+  plugin.disconnect()
 
   // ...
+
+  // when you're done using the plugin, call factory.remove in order to
+  // get rid of all event listeners and stop caching the plugin.
+
+  factory.remove(account)
 })

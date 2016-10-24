@@ -1,3 +1,5 @@
+'use strict'
+
 const co = require('co')
 const Plugin = require('./plugin')
 const reconnectCore = require('reconnect-core')
@@ -14,27 +16,36 @@ class PluginFactory {
   * @param {string} opts.adminUsername admin account username
   * @param {string} opts.adminPassword admin account password
   * @param {string} opts.accounts endpoint to subscribe to all accounts
+  * @param {string} opts.prefix optional set ledger prefix
   */
   constructor (opts) {
     this.adminUsername = opts.adminUsername
     this.adminPassword = opts.adminPassword
     this.adminAccount = opts.adminAccount
     this.metadata = {}
-
-    // weakmap allows elements to be garbage collected if they aren't being
-    // used. this stops the factory from holding onto unused plugins forever.
+    this.metadata.prefix = opts.prefix
+    this.connected = false
     this.plugins = new Map()
+  }
+
+  isConnected () {
+    return this.connected
   }
 
   connect () {
     return co.wrap(this._connect).call(this)
   }
   * _connect () {
+    if (this.connected) {
+      return
+    }
+
     // create the central admin instance
     this.adminPlugin = new Plugin({
       username: this.adminUsername,
       password: this.adminPassword,
-      account: this.adminAccount
+      account: this.adminAccount,
+      prefix: this.metadata.prefix
     })
 
     debug('connecting admin plugin')
@@ -44,6 +55,8 @@ class PluginFactory {
     debug('retrieving ledger metadata')
     this.metadata.prefix = yield this.adminPlugin.getPrefix()
     this.metadata.info = yield this.adminPlugin.getInfo()
+    this.metadata.urls = this.adminPlugin.urls
+    this.metadata.host = this.adminPlugin.host
 
     const endpoint = this.adminPlugin
       .urls
@@ -67,6 +80,7 @@ class PluginFactory {
         debug('websocket exists now')
         ws.on('open', () => {
           debug('ws connected to ' + endpoint)
+          this.connected = true
           resolve(null)
         })
 
@@ -125,10 +139,11 @@ class PluginFactory {
   }
 
   disconnect () {
-    return co.wrap(this._connect).call(this)
+    return co.wrap(this._disconnect).call(this)
   }
   * _disconnect () {
     debug('disconnecting admin plugin')
+    this.connected = false
     yield this.adminPlugin.disconnect()
   }
 
@@ -152,8 +167,9 @@ class PluginFactory {
     })
 
     if (exists.statusCode !== 200) {
-      debug('account ' + opts.account + ' cannot be reached: ' + exists.statusCode)
-      return
+      const msg = 'account ' + opts.account + ' cannot be reached: ' + exists.statusCode
+      debug(msg)
+      throw new UnreachableError(msg)
     }
 
     // otherwise, create a new plugin
@@ -166,11 +182,23 @@ class PluginFactory {
     // 'connects' the plugin without really connecting it
     plugin.connected = true
     plugin.connection = {} // stop plugin from double-connecting
+    plugin.urls = this.metadata.urls
     plugin.info = this.metadata.info
     plugin.prefix = this.metadata.prefix
+    plugin.host = this.metadata.host
 
     this.plugins.set(opts.account, plugin)
     return plugin
+  }
+
+  /*
+  * @param {string} account account of the plugin being removed
+  */
+  remove (account) {
+    // delete all listeners to stop memory leaks
+    this.plugins.get(account).removeAllListeners()
+    this.plugins.delete(account)
+    return Promise.resolve(null)
   }
 }
 
