@@ -53,10 +53,9 @@ const factory = new PluginBellsFactory({
 factory.connect().then(() => {
 
   // `create` will make a new, connected, PluginBells instance. If a plugin is already
-  // created for a given account, then the existing plugin is returned from `create`
+  // created for a given username, then the existing plugin is returned from `create`
 
-  const account = 'https://red.ilpdemo.org/ledger/accounts/alice'
-  const plugin = factory.create({ account })
+  const plugin = factory.create({ username: 'alice' })
 
   const client = new Client(plugin)
 
@@ -73,5 +72,5 @@ factory.connect().then(() => {
   // when you're done using the plugin, call factory.remove in order to
   // get rid of all event listeners and stop caching the plugin.
 
-  factory.remove(account)
+  factory.remove('alice')
 })

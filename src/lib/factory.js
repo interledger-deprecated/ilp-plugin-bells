@@ -7,6 +7,7 @@ const WebSocket = require('ws')
 const debug = require('debug')('ilp-plugin-bells:factory')
 const UnreachableError = require('../errors/unreachable-error')
 const request = require('co-request')
+const pathToRegexp = require('path-to-regexp')
 
 class PluginFactory {
 
@@ -22,6 +23,7 @@ class PluginFactory {
     this.adminUsername = opts.adminUsername
     this.adminPassword = opts.adminPassword
     this.adminAccount = opts.adminAccount
+    this.accountRegex = null
     this.metadata = {}
     this.metadata.prefix = opts.prefix
     this.connected = false
@@ -58,10 +60,16 @@ class PluginFactory {
     this.metadata.urls = this.adminPlugin.urls
     this.metadata.host = this.adminPlugin.host
 
+    // generate account endpoints
+    this.accountRegex = pathToRegexp(this.metadata.urls.account, [{
+      name: 'name',
+      prefix: '/'
+    }])
+
     const endpoint = this.adminPlugin
       .urls
       .account_transfers
-      .replace(':name', '*')
+      .replace('/:name', '/*')
 
     const auth = this.adminUsername + ':' + this.adminPassword
     const options = {
@@ -125,7 +133,7 @@ class PluginFactory {
     // for every account in the notification, call that plugin's notification
     // handler
     for (let account of accounts) {
-      const plugin = this.plugins.get(account)
+      const plugin = this.plugins.get(this.accountRegex.exec(account)[1])
       if (plugin) {
         debug('sending notification to ' + account)
         co.wrap(plugin._handleNotification).call(
@@ -149,55 +157,74 @@ class PluginFactory {
 
   /*
   * @param {object} opts plugin options
-  * @param {string} opts.account account to create a plugin for
+  * @param {string} opts.username username to create a plugin for
   */
   create (opts) {
     return co.wrap(this._create).call(this, opts)
   }
   * _create (opts) {
+    if (!this.connected) {
+      throw new Error('Factory needs to be connected before \'create\'')
+    }
+
+    if (typeof opts.username !== 'string' || !opts.username.match(/[A-Za-z0-9._-~]/)) {
+      throw new Error('Invalid opts.username')
+    }
+
     // try to retrieve existing plugin
-    const existing = this.plugins.get(opts.account)
+    const existing = this.plugins.get(opts.username)
     if (existing) return existing
 
+    // parse endpoint to get URL
+    const account = this.metadata
+      .urls
+      .account
+      .replace('/:name', '/' + opts.username)
+
     // make sure that the account exists
-    const exists = yield request(opts.account, {
+    const exists = yield request(account, {
       headers: {
         Authorization: this.adminUsername + ':' + this.adminPassword
       }
     })
 
     if (exists.statusCode !== 200) {
-      const msg = 'account ' + opts.account + ' cannot be reached: ' + exists.statusCode
+      const msg = 'account ' + account + ' cannot be reached: ' + exists.statusCode
       debug(msg)
       throw new UnreachableError(msg)
     }
 
     // otherwise, create a new plugin
     const plugin = new Plugin({
-      username: null,
+      username: opts.username,
       password: null,
-      account: opts.account
+      account: account
     })
 
     // 'connects' the plugin without really connecting it
     plugin.connected = true
-    plugin.connection = {} // stop plugin from double-connecting
+
+    // stop plugin from double-connecting
+    plugin.disconnect = function () {}
+    plugin.connect = function () {}
+
     plugin.urls = this.metadata.urls
     plugin.info = this.metadata.info
     plugin.prefix = this.metadata.prefix
     plugin.host = this.metadata.host
 
-    this.plugins.set(opts.account, plugin)
+    this.plugins.set(opts.username, plugin)
     return plugin
   }
 
   /*
-  * @param {string} account account of the plugin being removed
+  * @param {string} username of the plugin being removed
   */
-  remove (account) {
+  remove (username) {
     // delete all listeners to stop memory leaks
-    this.plugins.get(account).removeAllListeners()
-    this.plugins.delete(account)
+    if (!this.plugins.get(username)) return Promise.resolve(null)
+    this.plugins.get(username).removeAllListeners()
+    this.plugins.delete(username)
     return Promise.resolve(null)
   }
 }
