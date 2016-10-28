@@ -112,9 +112,7 @@ describe('PluginBellsFactory', function () {
         .reply(404, {})
 
       try {
-        yield this.factory.create({
-          account: 'http://red.example/accounts/bob'
-        })
+        yield this.factory.create({ username: 'bob' })
         assert(false, 'factory create should have failed')
       } catch (e) {
         nockBob.done()
@@ -133,17 +131,13 @@ describe('PluginBellsFactory', function () {
           name: 'admin'
         })
 
-      const plugin = yield this.factory.create({
-        account: 'http://red.example/accounts/mike'
-      })
+      const plugin = yield this.factory.create({ username: 'mike' })
 
       nockMike.done()
       assert.isObject(plugin)
       assert.isTrue(plugin.isConnected())
 
-      const plugin2 = yield this.factory.create({
-        account: 'http://red.example/accounts/mike'
-      })
+      const plugin2 = yield this.factory.create({ username: 'mike' })
 
       assert.equal(plugin, plugin2, 'only one plugin should be made per account')
     })
@@ -159,9 +153,7 @@ describe('PluginBellsFactory', function () {
           name: 'admin'
         })
 
-      const pluginMike = yield this.factory.create({
-        account: 'http://red.example/accounts/mike'
-      })
+      const pluginMike = yield this.factory.create({ username: 'mike' })
 
       nockMike.done()
 
@@ -189,9 +181,7 @@ describe('PluginBellsFactory', function () {
           name: 'admin'
         })
 
-      const pluginMike = yield this.factory.create({
-        account: 'http://red.example/accounts/mike'
-      })
+      const pluginMike = yield this.factory.create({ username: 'mike' })
 
       nockMike.done()
 
@@ -223,9 +213,7 @@ describe('PluginBellsFactory', function () {
           name: 'admin'
         })
 
-      yield this.factory.create({
-        account: 'http://red.example/accounts/mike'
-      })
+      yield this.factory.create({ username: 'mike' })
 
       nockMike.done()
 

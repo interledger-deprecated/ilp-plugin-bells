@@ -60,6 +60,7 @@
     "debug": "^2.2.0",
     "eventemitter2": "^1.0.3",
     "lodash": "^4.13.1",
+    "path-to-regexp": "^1.6.0",
     "reconnect-core": "^1.2.0",
     "ws": "^1.1.0"
   }
