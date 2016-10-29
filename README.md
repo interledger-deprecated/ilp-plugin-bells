@@ -54,8 +54,9 @@ factory.connect().then(() => {
 
   // `create` will make a new, connected, PluginBells instance. If a plugin is already
   // created for a given username, then the existing plugin is returned from `create`
+  return factory.create({ username: 'alice' })
 
-  const plugin = factory.create({ username: 'alice' })
+}).then((plugin) => {
 
   const client = new Client(plugin)
 

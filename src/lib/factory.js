@@ -205,8 +205,8 @@ class PluginFactory {
     plugin.connected = true
 
     // stop plugin from double-connecting
-    plugin.disconnect = function () {}
-    plugin.connect = function () {}
+    plugin.disconnect = function () { return Promise.resolve(null) }
+    plugin.connect = function () { return Promise.resolve(null) }
 
     plugin.urls = this.metadata.urls
     plugin.info = this.metadata.info
