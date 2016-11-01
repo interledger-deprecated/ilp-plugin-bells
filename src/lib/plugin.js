@@ -341,7 +341,8 @@ class FiveBellsLedger extends EventEmitter2 {
     const destinationAddress = yield this.parseAddress(message.account)
     const fiveBellsMessage = {
       ledger: this.host,
-      account: this.urls.account.replace(':name', encodeURIComponent(destinationAddress.username)),
+      from: this.urls.account.replace(':name', encodeURIComponent(this.credentials.username)),
+      to: this.urls.account.replace(':name', encodeURIComponent(destinationAddress.username)),
       data: message.data
     }
 
@@ -654,7 +655,7 @@ class FiveBellsLedger extends EventEmitter2 {
     this._validateMessage(message)
     return this.emitAsync('incoming_message', {
       ledger: this.prefix,
-      account: this.prefix + this.accountUriToName(message.account),
+      account: this.prefix + this.accountUriToName(message.account || message.to),
       data: message.data
     })
   }
