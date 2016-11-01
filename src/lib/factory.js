@@ -198,7 +198,13 @@ class PluginFactory {
     const plugin = new Plugin({
       username: opts.username,
       password: null,
-      account: account
+      account: account,
+      credentials: {
+        // make sure that the plugin uses admin credentials
+        username: this.adminUsername,
+        password: this.adminPassword,
+        account: this.adminAccount
+      }
     })
 
     // 'connects' the plugin without really connecting it

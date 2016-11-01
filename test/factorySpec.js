@@ -15,7 +15,7 @@ const cloneDeep = require('lodash/cloneDeep')
 mock('ws', wsHelper.WebSocket)
 const PluginBellsFactory = require('..').Factory
 
-describe.only('PluginBellsFactory', function () {
+describe('PluginBellsFactory', function () {
   beforeEach(function * () {
     this.wsAdmin = new wsHelper.Server('ws://red.example/accounts/admin/transfers')
     this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/*/transfers')
@@ -190,6 +190,7 @@ describe.only('PluginBellsFactory', function () {
           ledger: 'http://red.example',
           data: { foo: 'bar' }
         })
+        .basicAuth({user: 'admin', pass: 'admin'})
         .reply(200)
 
       yield this.plugin.sendMessage({
@@ -202,6 +203,7 @@ describe.only('PluginBellsFactory', function () {
     it('sends a transfer with the correct fields', function * () {
       nock('http://red.example')
         .put('/transfers/' + this.transfer.id, this.fiveBellsTransferAlice)
+        .basicAuth({user: 'admin', pass: 'admin'})
         .reply(200)
 
       yield this.plugin.sendTransfer(this.transfer)

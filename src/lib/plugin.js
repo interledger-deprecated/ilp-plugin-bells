@@ -70,7 +70,11 @@ class FiveBellsLedger extends EventEmitter2 {
 
     this.configPrefix = options.prefix
     this.host = options.host || null
-    this.credentials = {
+
+    this.account = options.account
+    this.username = options.username
+
+    this.credentials = options.credentials || {
       account: options.account,
       username: options.username,
       password: options.password,
@@ -93,7 +97,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _connect () {
-    const accountUri = this.credentials.account
+    const accountUri = this.account
 
     if (this.connection) {
       debug('already connected, ignoring connection request')
@@ -113,7 +117,7 @@ class FiveBellsLedger extends EventEmitter2 {
     this.host = res.body.ledger
     // Set the username but don't overwrite the username in case it was provided
     if (!this.credentials.username) {
-      this.credentials.username = res.body.name
+      this.username = this.credentials.username = res.body.name
     }
 
     // Resolve ledger metadata
@@ -133,7 +137,7 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new Error('Unable to set prefix from ledger or from local config')
     }
 
-    const notificationsUrl = this.urls.account_transfers.replace(':name', this.credentials.username)
+    const notificationsUrl = this.urls.account_transfers.replace(':name', this.username)
     debug('subscribing to transfer notifications: ' + notificationsUrl)
     const auth = this.credentials.password && this.credentials.username &&
                    this.credentials.username + ':' + this.credentials.password
@@ -282,7 +286,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.connected) {
       return Promise.reject(new Error('Must be connected before getAccount can be called'))
     }
-    return Promise.resolve(this.prefix + this.accountUriToName(this.credentials.account))
+    return Promise.resolve(this.prefix + this.accountUriToName(this.account))
   }
 
   _validateTransfer (transfer) {
@@ -341,7 +345,7 @@ class FiveBellsLedger extends EventEmitter2 {
     const destinationAddress = yield this.parseAddress(message.account)
     const fiveBellsMessage = {
       ledger: this.host,
-      from: this.urls.account.replace(':name', encodeURIComponent(this.credentials.username)),
+      from: this.urls.account.replace(':name', encodeURIComponent(this.username)),
       to: this.urls.account.replace(':name', encodeURIComponent(destinationAddress.username)),
       data: message.data
     }
@@ -378,7 +382,7 @@ class FiveBellsLedger extends EventEmitter2 {
       id: this.urls.transfer.replace(':id', transfer.id),
       ledger: this.host,
       debits: [omitNil({
-        account: this.credentials.account,
+        account: this.account,
         amount: transfer.amount,
         authorized: true,
         memo: transfer.noteToSelf
@@ -546,7 +550,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
     let handled = false
     for (let credit of fiveBellsTransfer.credits) {
-      if (credit.account === this.credentials.account) {
+      if (credit.account === this.account) {
         handled = true
 
         const transfer = omitNil({
@@ -595,7 +599,7 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     for (let debit of fiveBellsTransfer.debits) {
-      if (debit.account === this.credentials.account) {
+      if (debit.account === this.account) {
         handled = true
 
         // This connector only launches transfers with one credit, so there
