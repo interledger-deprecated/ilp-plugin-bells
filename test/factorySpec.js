@@ -168,7 +168,8 @@ describe('PluginBellsFactory', function () {
         type: 'message',
         resource: {
           ledger: 'http://red.example',
-          account: 'http://red.example/accounts/mike',
+          to: 'http://red.example/accounts/mike',
+          from: 'http://red.example/accounts/alice',
           data: {}
         },
         related_resources: {}

@@ -126,8 +126,11 @@ class PluginFactory {
       accounts = accounts.concat(notification.resource.debits
         .map((c) => (c.account)))
     } else if (notification.type === 'message') {
-      // add account
-      accounts.push(notification.resource.account)
+      // add receiver
+      accounts.push(notification.resource.to)
+
+      // add the sender
+      accounts.push(notification.resource.from)
     }
 
     // for every account in the notification, call that plugin's notification
