@@ -51,7 +51,7 @@ describe('Transfer methods', function () {
       .get('/')
       .reply(200, this.infoRedLedger)
 
-    this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
 
     yield this.plugin.connect()
   })

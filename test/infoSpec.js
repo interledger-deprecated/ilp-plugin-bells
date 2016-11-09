@@ -42,7 +42,7 @@ describe('Info methods', function () {
       .get('/')
       .reply(200, infoRedLedger)
 
-    this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
 
     yield this.plugin.connect()
   })
@@ -186,7 +186,7 @@ describe('Info methods', function () {
           name: 'mike'
         })
 
-      this.wsRedLedger = new wsHelper.Server('ws://blue.example/accounts/mike/transfers')
+      this.wsRedLedger = wsHelper.makeServer('ws://blue.example/websocket')
 
       yield plugin.connect()
       yield assert.isFulfilled(plugin.getPrefix(), 'example.blue.')

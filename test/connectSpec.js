@@ -25,7 +25,7 @@ describe('Connection methods', function () {
       password: 'mike'
     })
 
-    this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
   })
 
@@ -211,7 +211,7 @@ describe('Connection methods', function () {
         'connectors': 'http://other.example/',
         'accounts': 'http://thing.example/a',
         'account': 'http://red.example/accounts/:name',
-        'account_transfers': 'ws://red.example/accounts/:name/transfers',
+        'websocket': 'ws://red.example/websocket',
         'message': 'http://red.example/messages'
       }
       const infoNock = nock('http://red.example')
@@ -224,7 +224,7 @@ describe('Connection methods', function () {
         'transfer_fulfillment',
         'transfer_rejection',
         'account',
-        'account_transfers',
+        'websocket',
         'message'
       ]), 'urls should be set from metadata')
       accountNock.done()
@@ -389,7 +389,7 @@ describe('Connection methods', function () {
       return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata account url must be a full http(s) url')
     })
 
-    it('should reject if the ledger metadata does not include account_transfers url', function * () {
+    it('should reject if the ledger metadata does not include websocket url', function * () {
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -400,14 +400,14 @@ describe('Connection methods', function () {
         .get('/')
         .reply(200, _.merge({}, this.infoRedLedger, {
           urls: {
-            account_transfers: null
+            websocket: null
           }
         }))
 
-      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata does not include account_transfers url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata does not include websocket url')
     })
 
-    it('should reject if the ledger metadata account_transfers url is not a full ws url', function * () {
+    it('should reject if the ledger metadata websocket url is not a full ws url', function * () {
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -417,15 +417,13 @@ describe('Connection methods', function () {
       nock('http://red.example')
         .get('/')
         .reply(200, _.merge({}, this.infoRedLedger, {
-          urls: {
-            account_transfers: '/accounts/:name/transfers'
-          }
+          urls: { websocket: '/websocket' }
         }))
 
-      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata account_transfers url must be a full ws(s) url')
+      return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata websocket url must be a full ws(s) url')
     })
 
-    it('should subscribe to notifications using the account_transfers websocket url', function * () {
+    it('should subscribe to notifications using the websocket websocket url', function * () {
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -433,7 +431,7 @@ describe('Connection methods', function () {
           name: 'mike'
         })
       let usedCorrectWsUrl = false
-      const wsRedLedger = new wsHelper.Server('ws://somewhererandom.example/notifications/mike')
+      const wsRedLedger = wsHelper.makeServer('ws://somewhererandom.example/notifications/mike')
       wsRedLedger.on('connection', () => {
         usedCorrectWsUrl = true
       })
@@ -442,7 +440,7 @@ describe('Connection methods', function () {
         .get('/')
         .reply(200, _.merge(this.infoRedLedger, {
           urls: {
-            account_transfers: 'ws://somewhererandom.example/notifications/:name'
+            websocket: 'ws://somewhererandom.example/notifications/mike'
           }
         }))
 
@@ -462,7 +460,6 @@ describe('Connection methods', function () {
       const infoNock = nock('http://red.example')
         .get('/')
         .reply(200, this.infoRedLedger)
-      const wsRedLedger = new wsHelper.Server('ws://red.example/accounts/xavier/transfers')
       const plugin = new PluginBells({
         prefix: 'foo.',
         account: 'http://red.example/accounts/mike',
@@ -473,7 +470,6 @@ describe('Connection methods', function () {
       assert.equal(plugin.credentials.username, 'xavier')
       accountNock.done()
       infoNock.done()
-      wsRedLedger.stop()
     })
 
     it('doesn\'t retry if account is nonexistant', function () {

@@ -19,7 +19,7 @@ const find = require('lodash/find')
 const backoffMin = 1000
 const backoffMax = 30000
 
-const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'account_transfers', 'message' ]
+const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'websocket', 'message' ]
 
 function wait (ms) {
   return function (done) {
@@ -125,11 +125,15 @@ class FiveBellsLedger extends EventEmitter2 {
     this.connector = options.connector || null
 
     this.debugReplyNotifications = options.debugReplyNotifications || false
+    this.rpcId = 1
 
     this.info = null
     this.connection = null
     this.connected = false
+    this.ws = null
     this.urls = null
+    this.on('_rpc:notification', (notif) =>
+      co.wrap(this._handleNotification).call(this, notif))
   }
 
   connect () {
@@ -188,7 +192,7 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new Error('Unable to set prefix from ledger or from local config')
     }
 
-    const notificationsUrl = this.urls.account_transfers.replace(':name', this.username)
+    const notificationsUrl = this.urls.websocket
     debug('subscribing to transfer notifications: ' + notificationsUrl)
     const auth = this.credentials.password && this.credentials.username &&
                    this.credentials.username + ':' + this.credentials.password
@@ -207,21 +211,19 @@ class FiveBellsLedger extends EventEmitter2 {
 
     return new Promise((resolve, reject) => {
       this.connection = reconnect({immediate: true}, (ws) => {
-        ws.on('open', () => {
-          debug('ws connected to ' + notificationsUrl)
-          resolve(null)
-        })
-        ws.on('message', (msg) => {
-          let notification
+        ws.on('open', () => { debug('ws connected to ' + notificationsUrl) })
+        ws.on('message', (rpcMessageString) => {
+          let rpcMessage
           try {
-            notification = JSON.parse(msg)
+            rpcMessage = JSON.parse(rpcMessageString)
           } catch (err) {
-            debug('invalid notification', msg)
+            debug('invalid notification', rpcMessageString)
             return
           }
 
-          co.wrap(this._handleNotification)
-            .call(this, notification.type, notification.resource, notification.related_resources)
+          if (rpcMessage.method === 'connect') return resolve(null)
+          co.wrap(this._handleIncomingRpcMessage)
+            .call(this, rpcMessage)
             .then(() => {
               if (this.debugReplyNotifications) {
                 ws.send(JSON.stringify({ result: 'processed' }))
@@ -256,11 +258,13 @@ class FiveBellsLedger extends EventEmitter2 {
         ws.end = ws.close
       })
       this.connection
-        .on('connect', () => {
+        .on('connect', (ws) => {
+          this.ws = ws
           this.connected = true
           this.emit('connect')
         })
         .on('disconnect', () => {
+          this.ws = null
           this.connected = false
           this.emit('disconnect')
         })
@@ -269,7 +273,7 @@ class FiveBellsLedger extends EventEmitter2 {
           reject(err)
         })
         .connect()
-    })
+    }).then(() => this._subscribeAccounts([this.account]))
   }
 
   disconnect () {
@@ -582,17 +586,56 @@ class FiveBellsLedger extends EventEmitter2 {
     return null
   }
 
-  * _handleNotification (type, data, relatedResources) {
-    if (type === 'connect') {
-      debug('notify connect')
-    } else if (type === 'transfer') {
+  _sendRpcRequest (method, params) {
+    const requestId = this.rpcId++
+    return new Promise((resolve, reject) => {
+      const listener = (rpcResponse) => {
+        if (rpcResponse.id !== requestId) return
+        // Wait till nextTick to remove the listener so that it doesn't happen while the
+        // event is part way through being emitted, which causes issues iterating the listeners.
+        process.nextTick(() => this.removeListener('_rpc:response', listener))
+        if (rpcResponse.error) {
+          return reject(new ExternalError(rpcResponse.error.message))
+        }
+        resolve(rpcResponse)
+      }
+      this.on('_rpc:response', listener)
+      this.ws.send(JSON.stringify({ jsonrpc: '2.0', id: requestId, method, params }))
+    })
+  }
+
+  _subscribeAccounts (accounts) {
+    return this._sendRpcRequest('subscribe_account', {
+      eventType: '*',
+      accounts: accounts
+    })
+  }
+
+  * _handleIncomingRpcMessage (rpcMessage) {
+    // RpcResponse
+    if (!rpcMessage.method) {
+      return yield this.emitAsync('_rpc:response', rpcMessage)
+    }
+    const params = rpcMessage.params
+    // RpcRequest
+    if (rpcMessage.method === 'notify') {
+      yield this.emitAsync('_rpc:notification', params)
+    } else {
+      debug('unexpected rpc method: ' + rpcMessage.method)
+    }
+  }
+
+  * _handleNotification (notification) {
+    const event = notification.event
+    const data = notification.resource
+    if (event === 'transfer.create' || event === 'transfer.update') {
       debug('notify transfer', data.state, data.id)
-      return yield this._handleTransferNotification(data, relatedResources)
-    } else if (type === 'message') {
+      return yield this._handleTransferNotification(data, notification.related_resources)
+    } else if (event === 'message.send') {
       debug('notify message', data.account)
       return yield this._handleMessageNotification(data)
     } else {
-      throw new UnrelatedNotificationError('Invalid notification type: ' + type)
+      throw new UnrelatedNotificationError('Invalid notification event: ' + event)
     }
   }
 
@@ -775,7 +818,7 @@ function parseAndValidateLedgerUrls (metadataUrls) {
       throw new ExternalError('ledger metadata does not include ' + service + ' url')
     }
 
-    if (service === 'account_transfers') {
+    if (service === 'websocket') {
       if (metadataUrls[service].indexOf('ws') !== 0) {
         throw new ExternalError('ledger metadata ' + service + ' url must be a full ws(s) url')
       }
