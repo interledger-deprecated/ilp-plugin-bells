@@ -36,13 +36,17 @@ describe('Info methods', function () {
         name: 'mike'
       })
 
+    nock('http://red.example')
+      .get('/auth_token')
+      .reply(200, {token: 'abc'})
+
     const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
     nock('http://red.example')
       .get('/')
       .reply(200, infoRedLedger)
 
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
 
     yield this.plugin.connect()
   })
@@ -140,6 +144,10 @@ describe('Info methods', function () {
         }
       })
 
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
       const infoRedLedger = Object.assign(
         cloneDeep(require('./data/infoRedLedger.json')),
         { ilp_prefix: 'example.blue.' }
@@ -171,6 +179,10 @@ describe('Info methods', function () {
         }
       })
 
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
       const infoRedLedger = Object.assign(
         cloneDeep(require('./data/infoRedLedger.json')),
         { ilp_prefix: 'example.blue.' }
@@ -186,7 +198,7 @@ describe('Info methods', function () {
           name: 'mike'
         })
 
-      this.wsRedLedger = wsHelper.makeServer('ws://blue.example/websocket')
+      this.wsRedLedger = wsHelper.makeServer('ws://blue.example/websocket?token=abc')
 
       yield plugin.connect()
       yield assert.isFulfilled(plugin.getPrefix(), 'example.blue.')

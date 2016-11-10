@@ -17,7 +17,7 @@ const PluginBellsFactory = require('..').Factory
 
 describe('PluginBellsFactory', function () {
   beforeEach(function * () {
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
     nock('http://red.example')
@@ -36,6 +36,10 @@ describe('PluginBellsFactory', function () {
     nock('http://red.example')
       .get('/')
       .reply(200, infoRedLedger)
+
+    nock('http://red.example')
+      .get('/auth_token')
+      .reply(200, {token: 'abc'})
 
     this.transfer = {
       id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',

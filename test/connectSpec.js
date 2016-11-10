@@ -25,7 +25,7 @@ describe('Connection methods', function () {
       password: 'mike'
     })
 
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
   })
 
@@ -45,6 +45,9 @@ describe('Connection methods', function () {
       nock('http://red.example')
         .get('/')
         .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
 
       yield assert.isFulfilled(this.plugin.connect(), null, 'should be fulfilled with null')
       assert.isTrue(this.plugin.isConnected())
@@ -52,20 +55,23 @@ describe('Connection methods', function () {
 
     it('doesn\'t connect when ws server is down', function () {
       nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
           ledger: 'http://red.example',
           name: 'mike'
         })
-      nock('http://red.example')
-        .get('/')
-        .reply(200, this.infoRedLedger)
 
       this.wsRedLedger.stop()
       return this.plugin.connect().should.be.rejected
     })
 
     it('ignores if called twice', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -92,6 +98,9 @@ describe('Connection methods', function () {
     })
 
     it('should set the username based on the account name returned', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
       const accountNock = nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -129,6 +138,9 @@ describe('Connection methods', function () {
       })
 
       it('creates a plugin using a webfinger ID', function * () {
+        nock('http://red.example')
+          .get('/auth_token')
+          .reply(200, {token: 'abc'})
         const accountNock = nock('http://red.example')
           .get('/accounts/mike')
           .reply(200, {
@@ -196,6 +208,9 @@ describe('Connection methods', function () {
     })
 
     it('should set urls from object in ledger metadata and strip unnecessary values', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
       const accountNock = nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -211,6 +226,7 @@ describe('Connection methods', function () {
         'connectors': 'http://other.example/',
         'accounts': 'http://thing.example/a',
         'account': 'http://red.example/accounts/:name',
+        'auth_token': 'http://red.example/auth_token',
         'websocket': 'ws://red.example/websocket',
         'message': 'http://red.example/messages'
       }
@@ -224,6 +240,7 @@ describe('Connection methods', function () {
         'transfer_fulfillment',
         'transfer_rejection',
         'account',
+        'auth_token',
         'websocket',
         'message'
       ]), 'urls should be set from metadata')
@@ -423,7 +440,26 @@ describe('Connection methods', function () {
       return assert.isRejected(this.plugin.connect(), ExternalError, 'ledger metadata websocket url must be a full ws(s) url')
     })
 
+    it('should reject if no auth token is retrieved', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {})
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      return assert.isRejected(this.plugin.connect(), Error, 'Unable to get auth token from ledger')
+    })
+
     it('should subscribe to notifications using the websocket websocket url', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -431,7 +467,7 @@ describe('Connection methods', function () {
           name: 'mike'
         })
       let usedCorrectWsUrl = false
-      const wsRedLedger = wsHelper.makeServer('ws://somewhererandom.example/notifications/mike')
+      const wsRedLedger = wsHelper.makeServer('ws://somewhererandom.example/notifications/mike?token=abc')
       wsRedLedger.on('connection', () => {
         usedCorrectWsUrl = true
       })
@@ -451,6 +487,9 @@ describe('Connection methods', function () {
       wsRedLedger.stop()
     })
     it('should not overwrite the username if one is specified in the options', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
       const accountNock = nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -500,6 +539,9 @@ describe('Connection methods', function () {
       nock('http://red.example')
         .get('/')
         .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
 
       yield this.plugin.connect()
     })

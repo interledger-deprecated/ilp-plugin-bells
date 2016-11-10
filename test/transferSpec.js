@@ -30,6 +30,10 @@ describe('Transfer methods', function () {
       }
     })
 
+    nock('http://red.example')
+      .get('/auth_token')
+      .reply(200, {token: 'abc'})
+
     this.nockAccount = nock('http://red.example')
       .get('/accounts/mike')
       .reply(200, {
@@ -51,7 +55,7 @@ describe('Transfer methods', function () {
       .get('/')
       .reply(200, this.infoRedLedger)
 
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
 
     yield this.plugin.connect()
   })
@@ -72,6 +76,9 @@ describe('Transfer methods', function () {
 
     it('should use the transfer url from the ledger metadata', function * () {
       nock.removeInterceptor(this.nockInfo)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -325,6 +332,9 @@ describe('Transfer methods', function () {
 
     it('should use the transfer_fulfillment url from the ledger metadata', function * () {
       nock.removeInterceptor(this.nockInfo)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {

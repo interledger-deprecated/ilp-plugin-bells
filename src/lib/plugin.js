@@ -19,7 +19,7 @@ const find = require('lodash/find')
 const backoffMin = 1000
 const backoffMax = 30000
 
-const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'websocket', 'message' ]
+const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'auth_token', 'websocket', 'message' ]
 
 function wait (ms) {
   return function (done) {
@@ -192,21 +192,11 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new Error('Unable to set prefix from ledger or from local config')
     }
 
-    const notificationsUrl = this.urls.websocket
-    debug('subscribing to transfer notifications: ' + notificationsUrl)
-    const auth = this.credentials.password && this.credentials.username &&
-                   this.credentials.username + ':' + this.credentials.password
-    const options = {
-      headers: auth && {
-        Authorization: 'Basic ' + new Buffer(auth, 'utf8').toString('base64')
-      },
-      cert: this.credentials.cert,
-      key: this.credentials.key,
-      ca: this.credentials.ca
-    }
-
+    const authToken = yield this._getAuthToken()
+    if (!authToken) throw new Error('Unable to get auth token from ledger')
+    const notificationsUrl = this.urls.websocket + '?token=' + encodeURIComponent(authToken)
     const reconnect = reconnectCore(() => {
-      return new WebSocket(notificationsUrl, omitNil(options))
+      return new WebSocket(notificationsUrl)
     })
 
     return new Promise((resolve, reject) => {
@@ -785,6 +775,16 @@ class FiveBellsLedger extends EventEmitter2 {
       username: addressParts.slice(0, 1).join('.'),
       additionalParts: addressParts.slice(1).join('.')
     }
+  }
+
+  * _getAuthToken () {
+    const authTokenRes = yield request(Object.assign(
+      requestCredentials(this.credentials), {
+        method: 'get',
+        uri: this.urls.auth_token
+      }))
+    const body = getResponseJSON(authTokenRes)
+    return body && body.token
   }
 }
 
