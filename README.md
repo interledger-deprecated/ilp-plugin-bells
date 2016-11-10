@@ -21,13 +21,11 @@ npm install --save ilp ilp-plugin-bells
 const Client = require('ilp').Client
 
 const client = new Client({
-  type: 'bells',
-  auth: {
-    prefix: 'ilpdemo.red.',
-    // Account URI
-    account: 'https://red.ilpdemo.org/ledger/accounts/alice',
-    password: 'alice'
-  }
+  _plugin: require('ilp-plugin-bells'),
+
+  // a webfinger identifier can be used to resolve account information
+  identifier: 'alice@red.ilpdemo.org',
+  password: 'alice'
 })
 ```
 

@@ -107,6 +107,94 @@ describe('Connection methods', function () {
       infoNock.done()
     })
 
+    describe('Webfinger login', function () {
+      beforeEach(function () {
+        this.plugin = new PluginBells({
+          identifier: 'mike@red.example',
+          password: 'mike'
+        })
+
+        this.webfinger = {
+          subject: 'acct:mike@red.example',
+          links: [
+            {
+              rel: 'https://interledger.org/rel/ledgerAccount',
+              href: 'http://red.example/accounts/mike'
+            }, {
+              rel: 'https://interledger.org/rel/ilpAddress',
+              href: 'example.red.mike'
+            }
+          ]
+        }
+      })
+
+      it('creates a plugin using a webfinger ID', function * () {
+        const accountNock = nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+
+        const infoNock = nock('http://red.example')
+          .get('/')
+          .reply(200, Object.assign(this.infoRedLedger, {ilp_prefix: 'example.red.'}))
+
+        const webfingerNock = nock('https://red.example')
+          .get('/.well-known/webfinger?resource=acct:mike@red.example')
+          .reply(200, this.webfinger)
+
+        yield this.plugin.connect()
+        assert.equal(this.plugin.credentials.username, 'mike')
+
+        accountNock.done()
+        infoNock.done()
+        webfingerNock.done()
+      })
+
+      it('won\'t construct a plugin with both identifier and other credentials', function () {
+        try {
+          const plugin = new PluginBells({
+            identifier: 'mike@red.example',
+            credentials: {}
+          })
+          assert(!plugin)
+        } catch (e) {
+          assert(true)
+        }
+      })
+
+      it('fails to connect a plugin with invalid webfinger subject', function () {
+        this.webfinger.subject = 'trash'
+
+        nock('https://red.example')
+          .get('/.well-known/webfinger?resource=acct:mike@red.example')
+          .reply(200, this.webfinger)
+
+        return assert.isRejected(this.plugin.connect(), /Error: subject \(/)
+      })
+
+      it('fails to connect a plugin without webfinger links', function () {
+        this.webfinger.links = null
+
+        nock('https://red.example')
+          .get('/.well-known/webfinger?resource=acct:mike@red.example')
+          .reply(200, this.webfinger)
+
+        return assert.isRejected(this.plugin.connect(), /Error: result body doesn't contain links \(/)
+      })
+
+      it('fails to connect a plugin without necessary fields', function () {
+        this.webfinger.links = []
+
+        nock('https://red.example')
+          .get('/.well-known/webfinger?resource=acct:mike@red.example')
+          .reply(200, this.webfinger)
+
+        return assert.isRejected(this.plugin.connect(), /Error: failed to get essential fields/)
+      })
+    })
+
     it('should set urls from object in ledger metadata and strip unnecessary values', function * () {
       const accountNock = nock('http://red.example')
         .get('/accounts/mike')
