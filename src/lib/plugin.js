@@ -27,6 +27,38 @@ function wait (ms) {
   }
 }
 
+function * resolveWebfingerOptions (identifier) {
+  const host = identifier.split('@')[1]
+  const resource = 'acct:' + identifier
+
+  const res = yield request({
+    uri: 'https://' + host + '/.well-known/webfinger?resource=' + resource,
+    json: true
+  })
+
+  if (res.body.subject !== resource) {
+    throw new Error('subject (' + res.body.subject + ') doesn\'t match resource (' + resource + ')')
+  } else if (!res.body.links || typeof res.body.links !== 'object') {
+    throw new Error('result body doesn\'t contain links (' + resource + ')')
+  }
+
+  const newOptions = { credentials: {} }
+
+  for (let link of res.body.links) {
+    if (link.rel === 'https://interledger.org/rel/ledgerAccount') {
+      newOptions.credentials.account = newOptions.account = link.href
+    } else if (link.rel === 'https://interledger.org/rel/ilpAddress') {
+      newOptions.credentials.username = link.href.split('.').pop()
+    }
+  }
+
+  if (!newOptions.account || !newOptions.credentials.username) {
+    throw new Error('failed to get essential fields from ' + JSON.stringify(res.body))
+  }
+
+  return newOptions
+}
+
 function * requestRetry (opts, errorMessage, credentials) {
   let delay = backoffMin
   while (true) {
@@ -74,6 +106,14 @@ class FiveBellsLedger extends EventEmitter2 {
     this.account = options.account
     this.username = options.username
 
+    // optional: use account@ledger.example in order to authenticate
+    // instead of using account URI + username
+    this.identifier = options.identifier
+
+    if (options.identifier && options.credentials) {
+      throw new Error('Identifier will overwrite custom credentials')
+    }
+
     this.credentials = options.credentials || {
       account: options.account,
       username: options.username,
@@ -97,12 +137,23 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _connect () {
-    const accountUri = this.account
-
     if (this.connection) {
       debug('already connected, ignoring connection request')
       return Promise.resolve(null)
     }
+
+    if (this.identifier) {
+      const newOptions = yield resolveWebfingerOptions(this.identifier)
+
+      this.credentials = Object.assign(
+        {},
+        newOptions.credentials,
+        { password: this.credentials.password }
+      )
+      this.account = newOptions.account
+    }
+
+    const accountUri = this.account
 
     // Resolve account information
     const res = yield requestRetry({
@@ -116,7 +167,7 @@ class FiveBellsLedger extends EventEmitter2 {
     }
     this.host = res.body.ledger
     // Set the username but don't overwrite the username in case it was provided
-    if (!this.credentials.username) {
+    if (!this.credentials.username || !this.username) {
       this.username = this.credentials.username = res.body.name
     }
 
