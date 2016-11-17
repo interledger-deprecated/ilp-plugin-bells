@@ -9,14 +9,13 @@ const pathToRegexp = require('path-to-regexp')
 
 class PluginFactory {
 
-  /*
-  * @param {object} opts Options for PluginFactory
-  *
-  * @param {string} opts.adminUsername admin account username
-  * @param {string} opts.adminPassword admin account password
-  * @param {string} opts.adminAccount admin account endpoint
-  * @param {string} opts.prefix optional set ledger prefix
-  */
+  /**
+   * @param {object} opts Options for PluginFactory
+   * @param {string} opts.adminUsername admin account username
+   * @param {string} opts.adminPassword admin account password
+   * @param {string} opts.adminAccount admin account endpoint
+   * @param {string} opts.prefix optional set ledger prefix
+   */
   constructor (opts) {
     this.adminUsername = opts.adminUsername
     this.adminPassword = opts.adminPassword
