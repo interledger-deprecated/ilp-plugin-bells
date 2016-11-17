@@ -2,8 +2,6 @@
 
 const co = require('co')
 const Plugin = require('./plugin')
-const reconnectCore = require('reconnect-core')
-const WebSocket = require('ws')
 const debug = require('debug')('ilp-plugin-bells:factory')
 const UnreachableError = require('../errors/unreachable-error')
 const request = require('co-request')
@@ -16,7 +14,7 @@ class PluginFactory {
   *
   * @param {string} opts.adminUsername admin account username
   * @param {string} opts.adminPassword admin account password
-  * @param {string} opts.accounts endpoint to subscribe to all accounts
+  * @param {string} opts.adminAccount admin account endpoint
   * @param {string} opts.prefix optional set ledger prefix
   */
   constructor (opts) {
@@ -26,21 +24,19 @@ class PluginFactory {
     this.accountRegex = null
     this.metadata = {}
     this.metadata.prefix = opts.prefix
-    this.connected = false
+    this.adminPlugin = null
     this.plugins = new Map()
   }
 
   isConnected () {
-    return this.connected
+    return this.adminPlugin && this.adminPlugin.isConnected()
   }
 
   connect () {
     return co.wrap(this._connect).call(this)
   }
   * _connect () {
-    if (this.connected) {
-      return
-    }
+    if (this.isConnected()) return
 
     // create the central admin instance
     this.adminPlugin = new Plugin({
@@ -49,6 +45,9 @@ class PluginFactory {
       account: this.adminAccount,
       prefix: this.metadata.prefix
     })
+    this.adminPlugin.removeAllListeners('_rpc:notification')
+    this.adminPlugin.on('_rpc:notification', (notif) =>
+      co.wrap(this._routeNotification).call(this, notif))
 
     debug('connecting admin plugin')
     yield this.adminPlugin.connect()
@@ -65,59 +64,12 @@ class PluginFactory {
       name: 'name',
       prefix: '/'
     }])
-
-    const endpoint = this.adminPlugin
-      .urls
-      .account_transfers
-      .replace('/:name', '/*')
-
-    const auth = this.adminUsername + ':' + this.adminPassword
-    const options = {
-      headers: {
-        Authorization: 'Basic ' + new Buffer(auth, 'utf8').toString('base64')
-      }
-    }
-
-    const reconnect = reconnectCore(() => {
-      return new WebSocket(endpoint, options)
-    })
-
-    debug('establishing websocket connection to ' + endpoint)
-    return new Promise((resolve, reject) => {
-      this.connection = reconnect({immediate: true}, (ws) => {
-        debug('websocket exists now')
-        ws.on('open', () => {
-          debug('ws connected to ' + endpoint)
-          this.connected = true
-          resolve(null)
-        })
-
-        ws.on('message', (msg) => {
-          const notification = JSON.parse(msg)
-
-          // call the correct handle function on the correct plugin
-          debug('notified of:', notification)
-          co.wrap(this._routeNotification).call(this, notification)
-        })
-
-        ws.on('error', () => {
-          debug('ws connection error on ' + endpoint)
-          reject(new UnreachableError('ws connection error on ' + endpoint))
-        })
-        ws.on('disconnect', () => {
-          debug('ws connection error on ' + endpoint)
-          reject(new UnreachableError('ws disconnect on ' + endpoint))
-        })
-      })
-
-      this.connection.connect()
-    })
   }
 
   * _routeNotification (notification) {
     let accounts = []
 
-    if (notification.type === 'transfer') {
+    if (notification.event === 'transfer.create' || notification.event === 'transfer.update') {
       // add credits
       accounts = accounts.concat(notification.resource.credits
         .map((c) => (c.account)))
@@ -125,7 +77,7 @@ class PluginFactory {
       // add debits
       accounts = accounts.concat(notification.resource.debits
         .map((c) => (c.account)))
-    } else if (notification.type === 'message') {
+    } else if (notification.event === 'message.send') {
       // add receiver
       accounts.push(notification.resource.to)
 
@@ -137,25 +89,15 @@ class PluginFactory {
     // handler
     for (let account of accounts) {
       const plugin = this.plugins.get(this.accountRegex.exec(account)[1])
-      if (plugin) {
-        debug('sending notification to ' + account)
-        co.wrap(plugin._handleNotification).call(
-          plugin, // 'this' argument
-          notification.type, // type
-          notification.resource, // data
-          notification.related_resources // related
-        )
-      }
+      if (!plugin) continue
+      debug('sending notification to ' + account)
+      co.wrap(plugin._handleNotification).call(plugin, notification)
     }
   }
 
   disconnect () {
-    return co.wrap(this._disconnect).call(this)
-  }
-  * _disconnect () {
     debug('disconnecting admin plugin')
-    this.connected = false
-    yield this.adminPlugin.disconnect()
+    return this.adminPlugin.disconnect()
   }
 
   /*
@@ -166,11 +108,11 @@ class PluginFactory {
     return co.wrap(this._create).call(this, opts)
   }
   * _create (opts) {
-    if (!this.connected) {
+    if (!this.isConnected()) {
       throw new Error('Factory needs to be connected before \'create\'')
     }
 
-    if (typeof opts.username !== 'string' || !opts.username.match(/[A-Za-z0-9._-~]/)) {
+    if (typeof opts.username !== 'string' || !/^[A-Za-z0-9._-~]+$/.test(opts.username)) {
       throw new Error('Invalid opts.username')
     }
 
@@ -223,6 +165,8 @@ class PluginFactory {
     plugin.host = this.metadata.host
 
     this.plugins.set(opts.username, plugin)
+    yield this.adminPlugin._subscribeAccounts(this._pluginAccounts())
+
     return plugin
   }
 
@@ -230,11 +174,20 @@ class PluginFactory {
   * @param {string} username of the plugin being removed
   */
   remove (username) {
-    // delete all listeners to stop memory leaks
     if (!this.plugins.get(username)) return Promise.resolve(null)
+    // delete all listeners to stop memory leaks
     this.plugins.get(username).removeAllListeners()
     this.plugins.delete(username)
     return Promise.resolve(null)
+  }
+
+  _pluginAccounts () {
+    const accounts = []
+    const plugins = this.plugins.values()
+    for (const plugin of plugins) {
+      accounts.push(plugin.account)
+    }
+    return accounts
   }
 }
 

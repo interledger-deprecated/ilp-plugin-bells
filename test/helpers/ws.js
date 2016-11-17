@@ -39,5 +39,27 @@ class MockWebSocket extends EventEmitter {
   }
 }
 
+exports.makeServer = function (uri) {
+  const server = new mockSocket.Server(uri)
+  server.on('connection', () => {
+    server.send(JSON.stringify({
+      jsonrpc: '2.0',
+      id: null,
+      method: 'connect'
+    }))
+  })
+  server.on('message', (rpcMessageString) => {
+    const rpcMessage = JSON.parse(rpcMessageString)
+    if (rpcMessage.method === 'subscribe_account') {
+      server.send(JSON.stringify({
+        jsonrpc: '2.0',
+        id: rpcMessage.id,
+        result: rpcMessage.params.accounts.length
+      }))
+    }
+  })
+  return server
+}
+
 exports.WebSocket = MockWebSocket
 exports.Server = mockSocket.Server

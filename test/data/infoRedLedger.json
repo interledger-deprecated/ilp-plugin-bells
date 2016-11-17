@@ -19,7 +19,8 @@
     "connectors": "http://red.example/connectors",
     "accounts": "http://red.example/accounts",
     "account": "http://red.example/accounts/:name",
-    "account_transfers": "ws://red.example/accounts/:name/transfers",
+    "auth_token": "http://red.example/auth_token",
+    "websocket": "ws://red.example/websocket",
     "message": "http://red.example/messages"
   }
 }

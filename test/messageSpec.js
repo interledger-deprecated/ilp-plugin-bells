@@ -45,11 +45,15 @@ describe('Messaging', function () {
       data: {foo: 'bar'}
     }
 
+    nock('http://red.example')
+      .get('/auth_token')
+      .reply(200, {token: 'abc'})
+
     this.nockInfo = nock('http://red.example')
       .get('/')
       .reply(200, this.infoRedLedger)
 
-    this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
 
     yield this.plugin.connect()
   })
@@ -70,6 +74,9 @@ describe('Messaging', function () {
 
     it('should use the message url from the ledger metadata', function * () {
       nock.removeInterceptor(this.nockInfo)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {

@@ -29,7 +29,7 @@ describe('Notification handling', function () {
       }
     })
 
-    this.wsRedLedger = new wsHelper.Server('ws://red.example/accounts/mike/transfers')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
     const nockAccount = nock('http://red.example')
@@ -45,10 +45,15 @@ describe('Notification handling', function () {
       .get('/')
       .reply(200, infoRedLedger)
 
+    const nockAuthToken = nock('http://red.example')
+      .get('/auth_token')
+      .reply(200, {token: 'abc'})
+
     yield this.plugin.connect()
 
     nockAccount.done()
     nockInfo.done()
+    nockAuthToken.done()
 
     this.stubReceive = sinon.stub()
     this.stubFulfillExecutionCondition = sinon.stub()
@@ -123,19 +128,24 @@ describe('Notification handling', function () {
         done()
       })
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: {
-          id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
-          ledger: 'http://red.example',
-          debits: [{
-            account: 'http://red.example/accounts/alice',
-            amount: '10'
-          }],
-          credits: [{
-            account: 'http://red.example/accounts/bob',
-            amount: '10'
-          }],
-          state: 'executed'
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: {
+            id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
+            ledger: 'http://red.example',
+            debits: [{
+              account: 'http://red.example/accounts/alice',
+              amount: '10'
+            }],
+            credits: [{
+              account: 'http://red.example/accounts/bob',
+              amount: '10'
+            }],
+            state: 'executed'
+          }
         }
       }))
     })
@@ -152,10 +162,15 @@ describe('Notification handling', function () {
         done()
       })
       this.wsRedLedger.send(JSON.stringify({
-        type: 'message',
-        resource: {
-          ledger: 'http://blue.example',
-          account: 'http://red.example/accounts/alice'
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'message.send',
+          resource: {
+            ledger: 'http://blue.example',
+            account: 'http://red.example/accounts/alice'
+          }
         }
       }))
     })
@@ -174,12 +189,17 @@ describe('Notification handling', function () {
   describe('notification of timeout', function () {
     it('should handle a rejected transfer to mike', function * () {
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: Object.assign(this.fiveBellsTransferAlice, {
-          execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
-        }),
-        related_resources: {
-          execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: Object.assign(this.fiveBellsTransferAlice, {
+            execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+          }),
+          related_resources: {
+            execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+          }
         }
       }))
 
@@ -192,12 +212,17 @@ describe('Notification handling', function () {
 
     it('should handle a rejected transfer to alice', function * () {
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: Object.assign(this.fiveBellsTransferMike, {
-          execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
-        }),
-        related_resources: {
-          execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: Object.assign(this.fiveBellsTransferMike, {
+            execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+          }),
+          related_resources: {
+            execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+          }
         }
       }))
 
@@ -251,16 +276,21 @@ describe('Notification handling', function () {
 
     it('should emit "incoming_reject" with the rejection_message', function * () {
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: Object.assign(this.fiveBellsTransferExecuted, {
-          state: 'rejected',
-          credits: [
-            Object.assign(this.fiveBellsTransferExecuted.credits[0], {
-              rejected: true,
-              rejection_message: new Buffer('fail!').toString('base64')
-            })
-          ]
-        })
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: Object.assign(this.fiveBellsTransferExecuted, {
+            state: 'rejected',
+            credits: [
+              Object.assign(this.fiveBellsTransferExecuted.credits[0], {
+                rejected: true,
+                rejection_message: new Buffer('fail!').toString('base64')
+              })
+            ]
+          })
+        }
       }))
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
@@ -276,8 +306,13 @@ describe('Notification handling', function () {
       this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
       this.fiveBellsTransferExecuted.state = 'prepared'
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: this.fiveBellsTransferExecuted
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: this.fiveBellsTransferExecuted
+        }
       }))
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
@@ -290,8 +325,13 @@ describe('Notification handling', function () {
     it('should pass on incoming executed transfers', function * () {
       this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: this.fiveBellsTransferExecuted
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: this.fiveBellsTransferExecuted
+        }
       }))
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
@@ -307,8 +347,13 @@ describe('Notification handling', function () {
         amount: '10'
       })
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: this.fiveBellsTransferExecuted
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: this.fiveBellsTransferExecuted
+        }
       }))
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
@@ -359,16 +404,21 @@ describe('Notification handling', function () {
 
     it('should emit outgoing_cancel with the rejection_message', function * () {
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: Object.assign(this.fiveBellsTransferExecuted, {
-          state: 'rejected',
-          credits: [
-            Object.assign(this.fiveBellsTransferExecuted.credits[0], {
-              rejected: true,
-              rejection_message: new Buffer('fail!').toString('base64')
-            })
-          ]
-        })
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: Object.assign(this.fiveBellsTransferExecuted, {
+            state: 'rejected',
+            credits: [
+              Object.assign(this.fiveBellsTransferExecuted.credits[0], {
+                rejected: true,
+                rejection_message: new Buffer('fail!').toString('base64')
+              })
+            ]
+          })
+        }
       }))
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
@@ -384,8 +434,13 @@ describe('Notification handling', function () {
       this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
       this.fiveBellsTransferExecuted.state = 'prepared'
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: this.fiveBellsTransferExecuted
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: this.fiveBellsTransferExecuted
+        }
       }))
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
@@ -398,8 +453,13 @@ describe('Notification handling', function () {
     it('be notified of an outgoing execute', function * () {
       this.fiveBellsTransferExecuted.expires_at = (new Date()).toISOString()
       this.wsRedLedger.send(JSON.stringify({
-        type: 'transfer',
-        resource: this.fiveBellsTransferExecuted
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: this.fiveBellsTransferExecuted
+        }
       }))
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
@@ -413,8 +473,13 @@ describe('Notification handling', function () {
   describe('notifications of incoming messages', function () {
     it('emits "incoming_message"', function * () {
       this.wsRedLedger.send(JSON.stringify({
-        type: 'message',
-        resource: this.fiveBellsMessage
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'message.send',
+          resource: this.fiveBellsMessage
+        }
       }))
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
@@ -440,24 +505,34 @@ describe('Notification handling', function () {
           result: 'ignored',
           ignoreReason: {
             id: 'UnrelatedNotificationError',
-            message: 'Invalid notification type: random'
+            message: 'Invalid notification event: random'
           }
         })
         done()
       })
-      this.wsRedLedger.send(JSON.stringify({ type: 'random' }))
+      this.wsRedLedger.send(JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: { event: 'random' }
+      }))
     })
   })
 })
 
 function * itEmitsFulfillExecutionCondition () {
   this.wsRedLedger.send(JSON.stringify({
-    type: 'transfer',
-    resource: Object.assign(this.fiveBellsTransferExecuted, {
-      execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
-    }),
-    related_resources: {
-      execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+    jsonrpc: '2.0',
+    id: null,
+    method: 'notify',
+    params: {
+      event: 'transfer.update',
+      resource: Object.assign(this.fiveBellsTransferExecuted, {
+        execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+      }),
+      related_resources: {
+        execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+      }
     }
   }))
 
@@ -473,13 +548,18 @@ function * itEmitsFulfillExecutionCondition () {
 
 function * itEmitsFulfillCancellationCondition () {
   this.wsRedLedger.send(JSON.stringify({
-    type: 'transfer',
-    resource: Object.assign(this.fiveBellsTransferExecuted, {
-      state: 'rejected',
-      cancellation_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
-    }),
-    related_resources: {
-      cancellation_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+    jsonrpc: '2.0',
+    id: null,
+    method: 'notify',
+    params: {
+      event: 'transfer.update',
+      resource: Object.assign(this.fiveBellsTransferExecuted, {
+        state: 'rejected',
+        cancellation_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+      }),
+      related_resources: {
+        cancellation_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+      }
     }
   }))
 
