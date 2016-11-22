@@ -158,6 +158,16 @@ describe('Messaging', function () {
         .should.be.rejectedWith(errors.InvalidFieldsError, 'fail').notify(done)
     })
 
+    it('throws a NoSubscriptionsError', function (done) {
+      nock('http://red.example')
+        .post('/messages', this.ledgerMessage)
+        .basicAuth({user: 'mike', pass: 'mike'})
+        .reply(422, {id: 'NoSubscriptionsError', message: 'fail'})
+
+      this.plugin.sendMessage(this.message)
+        .should.be.rejectedWith(errors.NoSubscriptionsError, 'fail').notify(done)
+    })
+
     it('throws an NotAcceptedError on 400', function (done) {
       nock('http://red.example')
         .post('/messages', this.ledgerMessage)

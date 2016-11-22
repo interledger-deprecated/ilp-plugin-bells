@@ -405,6 +405,7 @@ class FiveBellsLedger extends EventEmitter2 {
     const body = sendRes.body
     if (sendRes.statusCode >= 400) {
       if (body.id === 'InvalidBodyError') throw new errors.InvalidFieldsError(body.message)
+      if (body.id === 'NoSubscriptionsError') throw new errors.NoSubscriptionsError(body.message)
       throw new errors.NotAcceptedError(body.message)
     }
     return null

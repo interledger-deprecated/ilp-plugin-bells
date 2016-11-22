@@ -56,6 +56,13 @@ class TransferNotConditionalError extends Error {
   }
 }
 
+class NoSubscriptionsError extends Error {
+  constructor (message) {
+    super(message)
+    this.name = 'NoSubscriptionsError'
+  }
+}
+
 module.exports = {
   AlreadyFulfilledError,
   AlreadyRolledBackError,
@@ -64,5 +71,6 @@ module.exports = {
   TransferNotConditionalError,
   DuplicateIdError,
   MissingFulfillmentError,
+  NoSubscriptionsError,
   NotAcceptedError
 }
