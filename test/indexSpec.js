@@ -55,17 +55,6 @@ describe('PluginBells constructor', function () {
         })
       }, 'Expected options.prefix to end with "."')
     })
-
-    it('should throw when options.connectTimeout is invalid', function () {
-      assert.throws(() => {
-        return new PluginBells({
-          prefix: 'example.red.', // no trailing "."
-          account: 'http://red.example/accounts/mike',
-          password: 'mike',
-          connectTimeout: 'test'
-        })
-      }, 'Expected options.connectTimeout to be a number, received: string')
-    })
   })
 })
 

@@ -71,14 +71,13 @@ function * requestRetry (requestOptions, retryOptions) {
       if (res.statusCode >= 400 && res.statusCode < 500) {
         break
       }
-      debug('request status ' + res.statusCode + ' retrying connection')
       return res
     } catch (err) {
-      debug('http request failed: ', err)
       delay = Math.min(Math.floor(1.5 * delay), backoffMax)
       if (timeout && Date.now() + delay - start > timeout) {
         throw new Error(retryOptions.errorMessage + ': timeout')
       }
+      debug('http request failed: ' + err.message + '; retrying')
       yield wait(delay)
     }
   }
@@ -127,11 +126,6 @@ class FiveBellsLedger extends EventEmitter2 {
     }
     this.connector = options.connector || null
 
-    this.connectTimeout = options.connectTimeout === undefined ? defaultConnectTimeout : options.connectTimeout
-    if (options.connectTimeout !== undefined && typeof options.connectTimeout !== 'number') {
-      throw new TypeError('Expected options.connectTimeout to be a number, received: ' + typeof options.connectTimeout)
-    }
-
     this.debugReplyNotifications = options.debugReplyNotifications || false
     this.rpcId = 1
 
@@ -144,11 +138,16 @@ class FiveBellsLedger extends EventEmitter2 {
       co.wrap(this._handleNotification).call(this, notif))
   }
 
-  connect () {
-    return co(this._connect.bind(this))
+  connect (options) {
+    const timeout = (!options || options.timeout === undefined) ? defaultConnectTimeout
+      : (options.timeout === null) ? 0 : options.timeout
+    if (typeof timeout !== 'number') {
+      throw new TypeError('Expected options.timeout to be a number, received: ' + typeof timeout)
+    }
+    return co(this._connect.bind(this), {timeout})
   }
 
-  * _connect () {
+  * _connect (options) {
     if (this.connection) {
       debug('already connected, ignoring connection request')
       return Promise.resolve(null)
@@ -178,7 +177,7 @@ class FiveBellsLedger extends EventEmitter2 {
       json: true
     }, {
       errorMessage: 'Failed to resolve ledger URI from account URI',
-      timeout: this.connectTimeout
+      timeout: options.timeout
     })
 
     if (!res.body.ledger) {

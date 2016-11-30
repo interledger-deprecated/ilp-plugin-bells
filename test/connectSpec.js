@@ -530,17 +530,17 @@ describe('Connection methods', function () {
     })
 
     it('fails if the retries exceed the timeout', function () {
-      const plugin = new PluginBells({
-        prefix: 'example.red.',
-        account: 'http://red.example/accounts/mike',
-        password: 'mike',
-        connectTimeout: 1000
-      })
       nock('http://red.example')
         .get('/accounts/mike')
         .replyWithError('fail')
-      return assert.isRejected(plugin.connect(),
+      return assert.isRejected(this.plugin.connect({timeout: 1000}),
         /Error: Failed to resolve ledger URI from account URI: timeout/)
+    })
+
+    it('fails when options.timeout is invalid', function () {
+      assert.throws(() => {
+        this.plugin.connect({timeout: 'test'})
+      }, 'Expected options.timeout to be a number, received: string')
     })
   })
 
