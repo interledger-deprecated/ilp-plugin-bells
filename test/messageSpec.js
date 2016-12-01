@@ -177,5 +177,15 @@ describe('Messaging', function () {
       this.plugin.sendMessage(this.message)
         .should.be.rejectedWith(errors.NotAcceptedError, 'fail').notify(done)
     })
+
+    it('throws an Error when not connected', function (done) {
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike'
+      })
+      plugin.sendMessage(this.message)
+        .should.be.rejectedWith(Error, 'Must be connected before sendMessage can be called').notify(done)
+    })
   })
 })

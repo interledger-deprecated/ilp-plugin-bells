@@ -251,6 +251,20 @@ describe('Transfer methods', function () {
         cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
       }).should.be.rejectedWith('Unexpected status code: 400').notify(done)
     })
+
+    it('throws an Error when not connected', function (done) {
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike'
+      })
+      plugin.sendTransfer({
+        id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+        account: 'example.red.alice',
+        amount: '123',
+        cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
+      }).should.be.rejectedWith(/Must be connected before sendTransfer can be called/).notify(done)
+    })
   })
 
   describe('fulfillCondition', function () {
@@ -379,6 +393,16 @@ describe('Transfer methods', function () {
       return assert.isRejected(this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ'),
         /ExternalError: Failed to submit fulfillment for transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c Error: undefined/)
     })
+
+    it('throws an Error when not connected', function () {
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike'
+      })
+      return assert.isRejected(plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ'),
+        /Must be connected before fulfillCondition can be called/)
+    })
   })
 
   describe('getFulfillment', function () {
@@ -429,6 +453,15 @@ describe('Transfer methods', function () {
         .replyWithError('broken')
       return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), /ExternalError: Remote error: message=broken/)
     })
+
+    it('throws an Error when not connected', function () {
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike'
+      })
+      return assert.isRejected(plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /Must be connected before getFulfillment can be called/)
+    })
   })
 
   describe('rejectIncomingTransfer', function () {
@@ -468,6 +501,15 @@ describe('Transfer methods', function () {
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(500)
       return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /ExternalError: Remote error: status=500/)
+    })
+
+    it('throws an Error when not connected', function () {
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike'
+      })
+      return assert.isRejected(plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /Must be connected before rejectIncomingTransfer can be called/)
     })
   })
 })

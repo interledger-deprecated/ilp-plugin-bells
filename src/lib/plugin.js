@@ -321,10 +321,13 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   getPrefix () {
-    if (!this.prefix) {
-      return Promise.reject(new Error('Prefix has not been set'))
+    if (this.prefix) {
+      return Promise.resolve(this.prefix)
     }
-    return Promise.resolve(this.prefix)
+    if (!this.connected) {
+      return Promise.reject(new Error('Must be connected before getPrefix can be called'))
+    }
+    return Promise.reject(new Error('Prefix has not been set'))
   }
 
   getAccount () {
@@ -349,6 +352,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getBalance () {
+    if (!this.connected) {
+      throw new Error('Must be connected before getBalance can be called')
+    }
     const creds = this.credentials
     let res
     try {
@@ -377,6 +383,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _sendMessage (message) {
+    if (!this.connected) {
+      throw new Error('Must be connected before sendMessage can be called')
+    }
     if (message.ledger !== this.prefix) {
       throw new errors.InvalidFieldsError('invalid ledger')
     }
@@ -416,6 +425,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _sendTransfer (transfer) {
+    if (!this.connected) {
+      throw new Error('Must be connected before sendTransfer can be called')
+    }
     if (typeof transfer.account !== 'string') {
       throw new errors.InvalidFieldsError('invalid account')
     }
@@ -488,6 +500,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _fulfillCondition (transferId, conditionFulfillment) {
+    if (!this.connected) {
+      throw new Error('Must be connected before fulfillCondition can be called')
+    }
     const fulfillmentRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'put',
@@ -528,6 +543,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getFulfillment (transferId) {
+    if (!this.connected) {
+      throw new Error('Must be connected before getFulfillment can be called')
+    }
     let res
     try {
       res = yield request(Object.assign({
@@ -559,6 +577,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _rejectIncomingTransfer (transferId, rejectionMessage) {
+    if (!this.connected) {
+      throw new Error('Must be connected before rejectIncomingTransfer can be called')
+    }
     const rejectionRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'put',
