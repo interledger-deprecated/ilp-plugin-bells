@@ -526,7 +526,7 @@ describe('Connection methods', function () {
         .reply(404)
 
       return assert.isRejected(this.plugin.connect(),
-        /Error: Failed to resolve ledger URI from account URI/)
+        /Error: Unable to connect to account/)
     })
 
     it('fails if the retries exceed the timeout', function () {
@@ -534,7 +534,7 @@ describe('Connection methods', function () {
         .get('/accounts/mike')
         .replyWithError('fail')
       return assert.isRejected(this.plugin.connect({timeout: 1000}),
-        /Error: Failed to resolve ledger URI from account URI: timeout/)
+        /Error: Unable to connect to account: timeout/)
     })
 
     it('fails when options.timeout is invalid', function () {

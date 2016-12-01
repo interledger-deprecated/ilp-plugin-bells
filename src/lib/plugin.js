@@ -176,7 +176,7 @@ class FiveBellsLedger extends EventEmitter2 {
       uri: accountUri,
       json: true
     }, {
-      errorMessage: 'Failed to resolve ledger URI from account URI',
+      errorMessage: 'Unable to connect to account',
       timeout: options.timeout
     })
 
