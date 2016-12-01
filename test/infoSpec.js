@@ -97,13 +97,13 @@ describe('Info methods', function () {
       yield assert.isFulfilled(this.plugin.getPrefix(), 'example.red.')
     })
 
-    it('fails without any prefix', function () {
+    it('fails without any prefix', function * () {
       const plugin = new PluginBells({
         // no prefix
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      return assert.isRejected(plugin.getPrefix(), /Error: Prefix has not been set/)
+      return assert.isRejected(plugin.getPrefix(), /Error: Must be connected before getPrefix can be called/)
     })
 
     it('cannot connect without any prefix', function * () {
@@ -236,6 +236,15 @@ describe('Info methods', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(500)
       return assert.isRejected(this.plugin.getBalance(), /Error: Unable to determine current balance/)
+    })
+
+    it('fails when not connected', function () {
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike'
+      })
+      return assert.isRejected(plugin.getBalance(), /Error: Must be connected before getBalance can be called/)
     })
   })
 })
