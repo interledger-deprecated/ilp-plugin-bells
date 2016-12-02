@@ -18,6 +18,7 @@ const find = require('lodash/find')
 
 const backoffMin = 1000
 const backoffMax = 30000
+const defaultConnectTimeout = 60000
 
 const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'auth_token', 'websocket', 'message' ]
 
@@ -59,28 +60,29 @@ function * resolveWebfingerOptions (identifier) {
   return newOptions
 }
 
-function * requestRetry (opts, errorMessage, credentials) {
+function * requestRetry (requestOptions, retryOptions) {
   let delay = backoffMin
+  const start = Date.now()
+  const timeout = retryOptions.timeout
   while (true) {
-    debug('connecting to account ' + opts.uri)
+    debug('connecting to account ' + requestOptions.uri)
     try {
-      let res = yield request(Object.assign(
-        {json: true},
-        requestCredentials(credentials),
-        opts))
+      const res = yield request(requestOptions)
       if (res.statusCode >= 400 && res.statusCode < 500) {
         break
       }
-      debug('request status ' + res.statusCode + ' retrying connection')
       return res
     } catch (err) {
-      debug('http request failed: ', err)
       delay = Math.min(Math.floor(1.5 * delay), backoffMax)
+      if (timeout && Date.now() + delay - start > timeout) {
+        throw new Error(retryOptions.errorMessage + ': timeout')
+      }
+      debug('http request failed: ' + err.message + '; retrying')
       yield wait(delay)
     }
   }
   debug('http request failed. aborting.')
-  throw new Error(errorMessage)
+  throw new Error(retryOptions.errorMessage)
 }
 
 class FiveBellsLedger extends EventEmitter2 {
@@ -136,11 +138,16 @@ class FiveBellsLedger extends EventEmitter2 {
       co.wrap(this._handleNotification).call(this, notif))
   }
 
-  connect () {
-    return co(this._connect.bind(this))
+  connect (options) {
+    const timeout = (!options || options.timeout === undefined) ? defaultConnectTimeout
+      : (options.timeout === null) ? 0 : options.timeout
+    if (typeof timeout !== 'number') {
+      throw new TypeError('Expected options.timeout to be a number, received: ' + typeof timeout)
+    }
+    return co(this._connect.bind(this), {timeout})
   }
 
-  * _connect () {
+  * _connect (options) {
     if (this.connection) {
       debug('already connected, ignoring connection request')
       return Promise.resolve(null)
@@ -158,13 +165,20 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     const accountUri = this.account
+    const accountProtocol = parseURL(accountUri).protocol
+    if (accountProtocol !== 'http:' && accountProtocol !== 'https:') {
+      throw new Error('Invalid account URI')
+    }
 
     // Resolve account information
-    const res = yield requestRetry({
+    const res = yield this._requestRetry({
       method: 'GET',
       uri: accountUri,
       json: true
-    }, 'Failed to resolve ledger URI from account URI', this.credentials)
+    }, {
+      errorMessage: 'Unable to connect to account',
+      timeout: options.timeout
+    })
 
     if (!res.body.ledger) {
       throw new Error('Failed to resolve ledger URI from account URI')
@@ -807,6 +821,12 @@ class FiveBellsLedger extends EventEmitter2 {
       }))
     const body = getResponseJSON(authTokenRes)
     return body && body.token
+  }
+
+  _requestRetry (requestOptions, retryOptions) {
+    return requestRetry(Object.assign({
+      credentials: this.credentials
+    }, requestOptions), retryOptions)
   }
 }
 

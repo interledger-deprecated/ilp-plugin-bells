@@ -53,6 +53,15 @@ describe('Connection methods', function () {
       assert.isTrue(this.plugin.isConnected())
     })
 
+    it('doesn\'t connect when the "account" is invalid', function (done) {
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'foo',
+        password: 'mike'
+      })
+      plugin.connect().should.be.rejectedWith(Error, 'Invalid account URI').notify(done)
+    })
+
     it('doesn\'t connect when ws server is down', function () {
       nock('http://red.example')
         .get('/')
@@ -517,7 +526,21 @@ describe('Connection methods', function () {
         .reply(404)
 
       return assert.isRejected(this.plugin.connect(),
-        /Error: Failed to resolve ledger URI from account URI/)
+        /Error: Unable to connect to account/)
+    })
+
+    it('fails if the retries exceed the timeout', function () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .replyWithError('fail')
+      return assert.isRejected(this.plugin.connect({timeout: 1000}),
+        /Error: Unable to connect to account: timeout/)
+    })
+
+    it('fails when options.timeout is invalid', function () {
+      assert.throws(() => {
+        this.plugin.connect({timeout: 'test'})
+      }, 'Expected options.timeout to be a number, received: string')
     })
   })
 
