@@ -74,7 +74,7 @@ function * requestRetry (requestOptions, retryOptions) {
       return res
     } catch (err) {
       delay = Math.min(Math.floor(1.5 * delay), backoffMax)
-      if (timeout && Date.now() + delay - start > timeout) {
+      if (Date.now() + delay - start > timeout) {
         throw new Error(retryOptions.errorMessage + ': timeout')
       }
       debug('http request failed: ' + err.message + '; retrying')
@@ -139,8 +139,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   connect (options) {
-    const timeout = (!options || options.timeout === undefined) ? defaultConnectTimeout
-      : (options.timeout === null) ? 0 : options.timeout
+    const timeout = (options && options.timeout) || defaultConnectTimeout
     if (typeof timeout !== 'number') {
       throw new TypeError('Expected options.timeout to be a number, received: ' + typeof timeout)
     }
