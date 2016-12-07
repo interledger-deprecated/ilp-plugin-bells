@@ -77,7 +77,7 @@ describe('Connection methods', function () {
       return this.plugin.connect().should.be.rejected
     })
 
-    it('ignores if called twice', function * () {
+    it('ignores if called twice in series', function * () {
       nock('http://red.example')
         .get('/auth_token')
         .reply(200, {token: 'abc'})
@@ -96,6 +96,31 @@ describe('Connection methods', function () {
       yield this.plugin.connect()
       assert.isTrue(this.plugin.isConnected())
       nockInfo.done()
+    })
+
+    it('ignores if called twice simultaneously', function (done) {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+
+      const nockInfo = nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+
+      Promise.all([
+        this.plugin.connect(),
+        this.plugin.connect()
+      ]).then(() => {
+        assert.isTrue(this.plugin.isConnected())
+        nockInfo.done()
+        done()
+      }).catch(done)
     })
 
     it('fails if the response is invalid', function () {
@@ -541,6 +566,34 @@ describe('Connection methods', function () {
       assert.throws(() => {
         this.plugin.connect({timeout: 'test'})
       }, 'Expected options.timeout to be a number, received: string')
+    })
+
+    it('reconnects if the socket is closed', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      assert.equal(this.plugin.isConnected(), false)
+      yield this.plugin.connect()
+      assert.equal(this.plugin.isConnected(), true)
+      this.plugin.ws.close()
+      assert.equal(this.plugin.isConnected(), false)
+      yield new Promise((resolve, reject) => {
+        // Wait for the plugin to reconnect.
+        setTimeout(() => {
+          assert.equal(this.plugin.isConnected(), true)
+          resolve()
+        }, 150)
+      })
     })
   })
 
