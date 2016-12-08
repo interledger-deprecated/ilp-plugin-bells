@@ -37,6 +37,7 @@
     "eslint-plugin-promise": "^3.4.0",
     "eslint-plugin-standard": "^2.0.1",
     "five-bells-integration-test-loader": "^1.0.0",
+    "five-bells-shared": "~21.0.1",
     "ghooks": "^2.0.0",
     "istanbul": "^0.4.3",
     "mocha": "^3.2.0",

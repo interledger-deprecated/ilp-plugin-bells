@@ -173,7 +173,8 @@ describe('Notification handling', function () {
           event: 'message.send',
           resource: {
             ledger: 'http://blue.example',
-            account: 'http://red.example/accounts/alice'
+            account: 'http://red.example/accounts/alice',
+            data: {}
           }
         }
       }))
@@ -187,6 +188,53 @@ describe('Notification handling', function () {
 
     it('ignores a notification with invalid JSON', function () {
       this.wsRedLedger.send('{')
+    })
+
+    it('emits an InvalidFieldsError when the transfer doesn\'t match the schema', function (done) {
+      this.wsRedLedger.on('message', function (message) {
+        assert.deepEqual(JSON.parse(message), {
+          result: 'ignored',
+          ignoreReason: {
+            id: 'InvalidFieldsError',
+            message: 'invalid transfer'
+          }
+        })
+        done()
+      })
+      this.wsRedLedger.send(JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'transfer.update',
+          resource: Object.assign(this.fiveBellsTransferAlice, {ledger: 'foo'})
+        }
+      }))
+    })
+
+    it('emits an InvalidFieldsError when the message doesn\'t match the schema', function (done) {
+      this.wsRedLedger.on('message', function (message) {
+        assert.deepEqual(JSON.parse(message), {
+          result: 'ignored',
+          ignoreReason: {
+            id: 'InvalidFieldsError',
+            message: 'invalid message'
+          }
+        })
+        done()
+      })
+      this.wsRedLedger.send(JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        method: 'notify',
+        params: {
+          event: 'message.send',
+          resource: {
+            ledger: 'http://red.example',
+            account: 'alice'
+          }
+        }
+      }))
     })
   })
 
