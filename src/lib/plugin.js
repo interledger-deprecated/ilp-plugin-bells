@@ -132,7 +132,9 @@ class FiveBellsLedger extends EventEmitter2 {
     this.info = null
     this.connection = null
     this.connecting = false
+    // `ready` is set when the metadata is retieved on the first connect() call.
     this.ready = false
+    // `connected` is set while a websocket connection is active.
     this.connected = false
     this.ws = null
     this.urls = null
@@ -221,6 +223,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.prefix) {
       throw new Error('Unable to set prefix from ledger or from local config')
     }
+    this.ready = true
 
     const authToken = yield this._getAuthToken()
     if (!authToken) throw new Error('Unable to get auth token from ledger')
@@ -284,12 +287,10 @@ class FiveBellsLedger extends EventEmitter2 {
       this.connection
         .on('connect', (ws) => {
           this.ws = ws
-          this.ready = true
           this.emit('connect')
         })
         .on('disconnect', () => {
           this.ws = null
-          this.ready = false
           this.emit('disconnect')
         })
         .on('error', (err) => {
