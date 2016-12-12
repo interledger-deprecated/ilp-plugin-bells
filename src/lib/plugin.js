@@ -131,6 +131,10 @@ class FiveBellsLedger extends EventEmitter2 {
 
     this.info = null
     this.connection = null
+    this.connecting = false
+    // `ready` is set when the metadata is retieved on the first connect() call.
+    this.ready = false
+    // `connected` is set while a websocket connection is active.
     this.connected = false
     this.ws = null
     this.urls = null
@@ -144,13 +148,28 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new TypeError('Expected options.timeout to be a number, received: ' + typeof timeout)
     }
     return co(this._connect.bind(this), {timeout})
+      .then(() => {
+        this.connecting = false
+        this.emit('_connect:done')
+      })
+      .catch((err) => {
+        this.connecting = false
+        this.emit('_connect:done', err)
+        throw err
+      })
   }
 
   * _connect (options) {
-    if (this.connection) {
+    if (this.ready) {
       debug('already connected, ignoring connection request')
       return Promise.resolve(null)
     }
+    if (this.connecting) {
+      return new Promise((resolve, reject) => {
+        this.once('_connect:done', (err) => err ? reject(err) : resolve())
+      })
+    }
+    this.connecting = true
 
     if (this.identifier) {
       const newOptions = yield resolveWebfingerOptions(this.identifier)
@@ -204,6 +223,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.prefix) {
       throw new Error('Unable to set prefix from ledger or from local config')
     }
+    this.ready = true
 
     const authToken = yield this._getAuthToken()
     if (!authToken) throw new Error('Unable to get auth token from ledger')
@@ -214,7 +234,10 @@ class FiveBellsLedger extends EventEmitter2 {
 
     return new Promise((resolve, reject) => {
       this.connection = reconnect({immediate: true}, (ws) => {
-        ws.on('open', () => { debug('ws connected to ' + notificationsUrl) })
+        ws.on('open', () => {
+          this.connected = true
+          debug('ws connected to ' + notificationsUrl)
+        })
         ws.on('message', (rpcMessageString) => {
           let rpcMessage
           try {
@@ -251,8 +274,9 @@ class FiveBellsLedger extends EventEmitter2 {
           reject(new UnreachableError('websocket connection error'))
         })
         ws.on('close', () => {
+          this.connected = false
           debug('ws disconnected from ' + notificationsUrl)
-          if (this.connected) {
+          if (this.ready) {
             reject(new UnreachableError('websocket connection error'))
           }
         })
@@ -263,12 +287,10 @@ class FiveBellsLedger extends EventEmitter2 {
       this.connection
         .on('connect', (ws) => {
           this.ws = ws
-          this.connected = true
           this.emit('connect')
         })
         .on('disconnect', () => {
           this.ws = null
-          this.connected = false
           this.emit('disconnect')
         })
         .on('error', (err) => {
@@ -280,12 +302,9 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   disconnect () {
-    const emitter = this.connection
-    if (!emitter) return Promise.resolve(null)
+    if (!this.connection) return Promise.resolve(null)
+    this.connection.disconnect()
     this.connection = null
-    // WebSocket#end doesn't exist, so reconnect-core#disconnect is no good.
-    emitter.reconnect = false
-    if (emitter._connection) emitter._connection.close()
     return Promise.resolve(null)
   }
 
@@ -337,14 +356,14 @@ class FiveBellsLedger extends EventEmitter2 {
     if (this.prefix) {
       return Promise.resolve(this.prefix)
     }
-    if (!this.connected) {
+    if (!this.ready) {
       return Promise.reject(new Error('Must be connected before getPrefix can be called'))
     }
     return Promise.reject(new Error('Prefix has not been set'))
   }
 
   getAccount () {
-    if (!this.connected) {
+    if (!this.ready) {
       return Promise.reject(new Error('Must be connected before getAccount can be called'))
     }
     return Promise.resolve(this.prefix + this.accountUriToName(this.account))
@@ -365,7 +384,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getBalance () {
-    if (!this.connected) {
+    if (!this.ready) {
       throw new Error('Must be connected before getBalance can be called')
     }
     const creds = this.credentials
@@ -396,7 +415,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _sendMessage (message) {
-    if (!this.connected) {
+    if (!this.ready) {
       throw new Error('Must be connected before sendMessage can be called')
     }
     if (message.ledger !== this.prefix) {
@@ -438,7 +457,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _sendTransfer (transfer) {
-    if (!this.connected) {
+    if (!this.ready) {
       throw new Error('Must be connected before sendTransfer can be called')
     }
     if (typeof transfer.account !== 'string') {
@@ -513,7 +532,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _fulfillCondition (transferId, conditionFulfillment) {
-    if (!this.connected) {
+    if (!this.ready) {
       throw new Error('Must be connected before fulfillCondition can be called')
     }
     const fulfillmentRes = yield request(Object.assign(
@@ -556,7 +575,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getFulfillment (transferId) {
-    if (!this.connected) {
+    if (!this.ready) {
       throw new Error('Must be connected before getFulfillment can be called')
     }
     let res
@@ -590,7 +609,7 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _rejectIncomingTransfer (transferId, rejectionMessage) {
-    if (!this.connected) {
+    if (!this.ready) {
       throw new Error('Must be connected before rejectIncomingTransfer can be called')
     }
     const rejectionRes = yield request(Object.assign(

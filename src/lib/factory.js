@@ -25,17 +25,18 @@ class PluginFactory {
     this.metadata.prefix = opts.prefix
     this.adminPlugin = null
     this.plugins = new Map()
+    this.ready = false
   }
 
   isConnected () {
     return this.adminPlugin && this.adminPlugin.isConnected()
   }
 
-  connect () {
-    return co.wrap(this._connect).call(this)
+  connect (options) {
+    return co.wrap(this._connect).call(this, options)
   }
-  * _connect () {
-    if (this.isConnected()) return
+  * _connect (options) {
+    if (this.adminPlugin) return yield this.adminPlugin.connect(options)
 
     // create the central admin instance
     this.adminPlugin = new Plugin({
@@ -49,7 +50,7 @@ class PluginFactory {
       co.wrap(this._routeNotification).call(this, notif))
 
     debug('connecting admin plugin')
-    yield this.adminPlugin.connect()
+    yield this.adminPlugin.connect(options)
 
     // get the shared metadata
     debug('retrieving ledger metadata')
@@ -63,6 +64,7 @@ class PluginFactory {
       name: 'name',
       prefix: '/'
     }])
+    this.ready = true
   }
 
   * _routeNotification (notification) {
@@ -107,7 +109,7 @@ class PluginFactory {
     return co.wrap(this._create).call(this, opts)
   }
   * _create (opts) {
-    if (!this.isConnected()) {
+    if (!this.ready) {
       throw new Error('Factory needs to be connected before \'create\'')
     }
 
@@ -152,11 +154,12 @@ class PluginFactory {
     })
 
     // 'connects' the plugin without really connecting it
-    plugin.connected = true
+    plugin.ready = true
 
     // stop plugin from double-connecting
     plugin.disconnect = function () { return Promise.resolve(null) }
     plugin.connect = function () { return Promise.resolve(null) }
+    plugin.isConnected = () => this.isConnected()
 
     plugin.urls = this.metadata.urls
     plugin.info = this.metadata.info
