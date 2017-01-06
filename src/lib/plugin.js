@@ -236,6 +236,7 @@ class FiveBellsLedger extends EventEmitter2 {
       this.connection = reconnect({immediate: true}, (ws) => {
         ws.on('open', () => {
           this.connected = true
+          this.emit('connect')
           debug('ws connected to ' + notificationsUrl)
         })
         ws.on('message', (rpcMessageString) => {
@@ -287,11 +288,11 @@ class FiveBellsLedger extends EventEmitter2 {
       this.connection
         .on('connect', (ws) => {
           this.ws = ws
-          this.emit('connect')
         })
         .on('disconnect', () => {
-          this.ws = null
+          this.connected = false
           this.emit('disconnect')
+          this.ws = null
         })
         .on('error', (err) => {
           debug('ws error on ' + notificationsUrl + ':', err)
@@ -303,9 +304,13 @@ class FiveBellsLedger extends EventEmitter2 {
 
   disconnect () {
     if (!this.connection) return Promise.resolve(null)
+    const disconnected = new Promise((resolve) => {
+      this.once('disconnect', resolve)
+    })
+
     this.connection.disconnect()
     this.connection = null
-    return Promise.resolve(null)
+    return disconnected
   }
 
   isConnected () {
