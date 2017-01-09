@@ -235,8 +235,10 @@ class FiveBellsLedger extends EventEmitter2 {
     return new Promise((resolve, reject) => {
       this.connection = reconnect({immediate: true}, (ws) => {
         ws.on('open', () => {
-          this.connected = true
-          this.emit('connect')
+          if (!this.connected) {
+            this.emit('connect')
+            this.connected = true
+          }
           debug('ws connected to ' + notificationsUrl)
         })
         ws.on('message', (rpcMessageString) => {
