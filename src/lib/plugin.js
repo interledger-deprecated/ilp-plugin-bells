@@ -126,7 +126,6 @@ class FiveBellsLedger extends EventEmitter2 {
     this.debugReplyNotifications = options.debugReplyNotifications || false
     this.rpcId = 1
 
-    this.info = null
     this.connection = null
     this.connecting = false
     // `ready` is set when the metadata is retieved on the first connect() call.
@@ -316,14 +315,10 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   getInfo () {
-    return co.wrap(this._getInfo).call(this)
-  }
-
-  * _getInfo () {
     if (!this.ready) {
-      return Promise.reject(new Error('Must be connected before getPrefix can be called'))
+      throw new Error('Must be connected before getInfo can be called')
     }
-    return this.ledgerContext.info
+    return this.ledgerContext.getInfo()
   }
 
   * _fetchLedgerMetadata (host) {
@@ -337,7 +332,7 @@ class FiveBellsLedger extends EventEmitter2 {
       res = yield request(host, {json: true})
     } catch (e) {
       if (!res || res.statusCode !== 200) {
-        debug('getInfo error %s', e)
+        debug('_fetchLedgerMetadata error %s', e)
         throwErr()
       }
     }
@@ -348,21 +343,11 @@ class FiveBellsLedger extends EventEmitter2 {
     return res.body
   }
 
-  getPrefix () {
-    if (!this.ready) {
-      return Promise.reject(new Error('Must be connected before getPrefix can be called'))
-    }
-    if (this.ledgerContext.prefix) {
-      return Promise.resolve(this.ledgerContext.prefix)
-    }
-    return Promise.reject(new Error('Prefix has not been set'))
-  }
-
   getAccount () {
     if (!this.ready) {
-      return Promise.reject(new Error('Must be connected before getAccount can be called'))
+      throw new Error('Must be connected before getAccount can be called')
     }
-    return Promise.resolve(this.ledgerContext.prefix + this.ledgerContext.accountUriToName(this.account))
+    return this.ledgerContext.prefix + this.ledgerContext.accountUriToName(this.account)
   }
 
   getBalance () {
@@ -414,7 +399,7 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new errors.InvalidFieldsError('invalid data')
     }
 
-    const destinationAddress = yield this.parseAddress(message.account)
+    const destinationAddress = this.parseAddress(message.account)
     const fiveBellsMessage = {
       ledger: this.ledgerContext.host,
       from: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(this.username)),
@@ -453,7 +438,7 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new errors.InvalidFieldsError('invalid amount')
     }
 
-    const sourceAddress = yield this.parseAddress(transfer.account)
+    const sourceAddress = this.parseAddress(transfer.account)
     const fiveBellsTransfer = omitNil({
       id: this.ledgerContext.urls.transfer.replace(':id', transfer.id),
       ledger: this.ledgerContext.host,
@@ -670,8 +655,8 @@ class FiveBellsLedger extends EventEmitter2 {
     yield this.emitAsync.apply(this, eventParams)
   }
 
-  * parseAddress (address) {
-    const prefix = yield this.getPrefix()
+  parseAddress (address) {
+    const prefix = this.getInfo().prefix
 
     if (!startsWith(prefix, address)) {
       debug('destination address has invalid prefix', { prefix, address })

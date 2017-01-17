@@ -35,11 +35,17 @@ function parseAndValidateLedgerUrls (metadataUrls) {
 class LedgerContext {
   constructor (host, ledgerMetadata) {
     this.host = host
+    this.ledgerMetadata = ledgerMetadata
     this.urls = parseAndValidateLedgerUrls(ledgerMetadata.urls)
     debug('using service urls:', this.urls)
     this.prefix = ledgerMetadata.ilp_prefix
-    this.info = {
-      connectors: ledgerMetadata.connectors,
+  }
+
+  getInfo () {
+    const ledgerMetadata = this.ledgerMetadata
+    return {
+      prefix: this.prefix,
+      connectors: ledgerMetadata.connectors.map((c) => this.prefix + c.name),
       precision: ledgerMetadata.precision,
       scale: ledgerMetadata.scale,
       currencyCode: ledgerMetadata.currency_code,
