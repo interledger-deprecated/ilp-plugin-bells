@@ -6,8 +6,9 @@ const debug = require('debug')('ilp-plugin-bells:factory')
 const UnreachableError = require('../errors/unreachable-error')
 const request = require('co-request')
 const pathToRegexp = require('path-to-regexp')
+const EventEmitter2 = require('eventemitter2').EventEmitter2
 
-class PluginFactory {
+class PluginFactory extends EventEmitter2 {
 
   /**
    * @param {object} opts Options for PluginFactory
@@ -17,9 +18,11 @@ class PluginFactory {
    * @param {string} opts.prefix optional set ledger prefix
    */
   constructor (opts) {
+    super()
     this.adminUsername = opts.adminUsername
     this.adminPassword = opts.adminPassword
     this.adminAccount = opts.adminAccount
+    this.globalSubscription = !!opts.globalSubscription
     this.accountRegex = null
     this.metadata = {}
     this.metadata.prefix = opts.prefix
@@ -64,6 +67,11 @@ class PluginFactory {
       name: 'name',
       prefix: '/'
     }])
+
+    if (this.globalSubscription) {
+      this.adminPlugin._subscribeAllAccounts()
+    }
+
     this.ready = true
   }
 
@@ -94,6 +102,9 @@ class PluginFactory {
       debug('sending notification to ' + account)
       co.wrap(plugin._handleNotification).call(plugin, notification)
     }
+
+    // emit event for global listeners
+    this.emit('notification', notification)
   }
 
   disconnect () {
@@ -167,7 +178,9 @@ class PluginFactory {
     plugin.host = this.metadata.host
 
     this.plugins.set(opts.username, plugin)
-    yield this.adminPlugin._subscribeAccounts(this._pluginAccounts())
+    if (!this.globalSubscription) {
+      yield this.adminPlugin._subscribeAccounts(this._pluginAccounts())
+    }
 
     return plugin
   }

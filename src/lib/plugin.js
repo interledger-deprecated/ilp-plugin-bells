@@ -662,6 +662,12 @@ class FiveBellsLedger extends EventEmitter2 {
     })
   }
 
+  _subscribeAllAccounts () {
+    return this._sendRpcRequest('subscribe_all_accounts', {
+      eventType: '*'
+    })
+  }
+
   * _handleIncomingRpcMessage (rpcMessage) {
     // RpcResponse
     if (!rpcMessage.method) {
