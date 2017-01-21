@@ -10,6 +10,7 @@ const mock = require('mock-require')
 const nock = require('nock')
 const wsHelper = require('./helpers/ws')
 const cloneDeep = require('lodash/cloneDeep')
+const ExternalError = require('../src/errors/external-error')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -81,14 +82,14 @@ describe('Info methods', function () {
       nock('http://red.example')
         .get('/')
         .reply(500)
-      return assert.isRejected(this.plugin.getInfo(), /ExternalError: Unable to determine ledger precision/)
+      return assert.isRejected(this.plugin.getInfo(), ExternalError, /Unable to determine ledger precision/)
     })
 
     it('throws an ExternalError when the precision is missing', function () {
       nock('http://red.example')
         .get('/')
         .reply(200, {scale: 4})
-      return assert.isRejected(this.plugin.getInfo(), /ExternalError: Unable to determine ledger precision/)
+      return assert.isRejected(this.plugin.getInfo(), ExternalError, /Unable to determine ledger precision/)
     })
   })
 
@@ -103,7 +104,7 @@ describe('Info methods', function () {
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      return assert.isRejected(plugin.getPrefix(), /Error: Must be connected before getPrefix can be called/)
+      return assert.isRejected(plugin.getPrefix(), /Must be connected before getPrefix can be called/)
     })
 
     it('cannot connect without any prefix', function * () {
@@ -129,7 +130,7 @@ describe('Info methods', function () {
           name: 'mike'
         })
 
-      yield assert.isRejected(plugin.connect(), /Error: Unable to set prefix from ledger or from local config/)
+      yield assert.isRejected(plugin.connect(), /Unable to set prefix from ledger or from local config/)
     })
 
     it('should use local if ledger and local prefix don\'t match', function * () {
@@ -217,7 +218,7 @@ describe('Info methods', function () {
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      return assert.isRejected(plugin.getAccount(), /Error: Must be connected before getAccount can be called/)
+      return assert.isRejected(plugin.getAccount(), /Must be connected before getAccount can be called/)
     })
   })
 
@@ -235,7 +236,7 @@ describe('Info methods', function () {
         .get('/accounts/mike')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(500)
-      return assert.isRejected(this.plugin.getBalance(), /Error: Unable to determine current balance/)
+      return assert.isRejected(this.plugin.getBalance(), /Unable to determine current balance/)
     })
 
     it('fails when not connected', function () {
@@ -244,8 +245,7 @@ describe('Info methods', function () {
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      return assert.isRejected(plugin.getBalance(), /Error: Must be connected before getBalance can be called/)
+      return assert.isRejected(plugin.getBalance(), /Must be connected before getBalance can be called/)
     })
   })
 })
-

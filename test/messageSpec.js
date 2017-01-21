@@ -13,6 +13,7 @@ const wsHelper = require('./helpers/ws')
 const errors = require('../src/errors')
 const cloneDeep = require('lodash/cloneDeep')
 const _ = require('lodash')
+const InvalidFieldsError = require('../src/errors').InvalidFieldsError
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -145,7 +146,7 @@ describe('Messaging', function () {
         ledger: 'example.red.',
         account: 'red.alice',
         data: {foo: 'bar'}
-      }), /^InvalidFieldsError: Destination address "red.alice" must start with ledger prefix "example.red."$/)
+      }), InvalidFieldsError, /^Destination address "red.alice" must start with ledger prefix "example.red."$/)
     })
 
     it('throws an InvalidFieldsError on InvalidBodyError', function (done) {
