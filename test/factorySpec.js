@@ -34,10 +34,6 @@ describe('PluginBellsFactory', function () {
       .reply(200, infoRedLedger)
 
     nock('http://red.example')
-      .get('/')
-      .reply(200, infoRedLedger)
-
-    nock('http://red.example')
       .get('/auth_token')
       .reply(200, {token: 'abc'})
 

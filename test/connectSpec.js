@@ -269,7 +269,7 @@ describe('Connection methods', function () {
         .reply(200, Object.assign({}, this.infoRedLedger, {urls: urls}))
 
       yield this.plugin.connect()
-      assert.deepEqual(this.plugin.urls, _.pick(urls, [
+      assert.deepEqual(this.plugin.ledgerContext.urls, _.pick(urls, [
         'transfer',
         'transfer_fulfillment',
         'transfer_rejection',

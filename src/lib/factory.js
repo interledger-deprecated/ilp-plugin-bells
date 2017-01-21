@@ -22,10 +22,10 @@ class PluginFactory extends EventEmitter2 {
     this.adminUsername = opts.adminUsername
     this.adminPassword = opts.adminPassword
     this.adminAccount = opts.adminAccount
+    this.configPrefix = opts.prefix
     this.globalSubscription = !!opts.globalSubscription
     this.accountRegex = null
-    this.metadata = {}
-    this.metadata.prefix = opts.prefix
+    this.ledgerContext = null
     this.adminPlugin = null
     this.plugins = new Map()
     this.ready = false
@@ -46,7 +46,7 @@ class PluginFactory extends EventEmitter2 {
       username: this.adminUsername,
       password: this.adminPassword,
       account: this.adminAccount,
-      prefix: this.metadata.prefix
+      prefix: this.configPrefix
     })
     this.adminPlugin.removeAllListeners('_rpc:notification')
     this.adminPlugin.on('_rpc:notification', (notif) =>
@@ -55,15 +55,11 @@ class PluginFactory extends EventEmitter2 {
     debug('connecting admin plugin')
     yield this.adminPlugin.connect(options)
 
-    // get the shared metadata
-    debug('retrieving ledger metadata')
-    this.metadata.prefix = yield this.adminPlugin.getPrefix()
-    this.metadata.info = yield this.adminPlugin.getInfo()
-    this.metadata.urls = this.adminPlugin.urls
-    this.metadata.host = this.adminPlugin.host
+    // store the shared context
+    this.ledgerContext = this.adminPlugin.ledgerContext
 
     // generate account endpoints
-    this.accountRegex = pathToRegexp(this.metadata.urls.account, [{
+    this.accountRegex = pathToRegexp(this.ledgerContext.urls.account, [{
       name: 'name',
       prefix: '/'
     }])
@@ -101,6 +97,10 @@ class PluginFactory extends EventEmitter2 {
       if (!plugin) continue
       debug('sending notification to ' + account)
       co.wrap(plugin._handleNotification).call(plugin, notification)
+        .catch(err => {
+          debug('error in event handlers for %s: %s', account,
+            (err && err.stack) ? err.stack : err)
+        })
     }
 
     // emit event for global listeners
@@ -133,7 +133,7 @@ class PluginFactory extends EventEmitter2 {
     if (existing) return existing
 
     // parse endpoint to get URL
-    const account = this.metadata
+    const account = this.ledgerContext
       .urls
       .account
       .replace('/:name', '/' + opts.username)
@@ -172,10 +172,7 @@ class PluginFactory extends EventEmitter2 {
     plugin.connect = function () { return Promise.resolve(null) }
     plugin.isConnected = () => this.isConnected()
 
-    plugin.urls = this.metadata.urls
-    plugin.info = this.metadata.info
-    plugin.prefix = this.metadata.prefix
-    plugin.host = this.metadata.host
+    plugin.ledgerContext = this.ledgerContext
 
     this.plugins.set(opts.username, plugin)
     if (!this.globalSubscription) {
