@@ -7,6 +7,7 @@ const UnreachableError = require('../errors/unreachable-error')
 const request = require('co-request')
 const pathToRegexp = require('path-to-regexp')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
+const translateBellsToPluginApi = require('./translate').translateBellsToPluginApi
 
 class PluginFactory extends EventEmitter2 {
 
@@ -93,6 +94,15 @@ class PluginFactory extends EventEmitter2 {
     // for every account in the notification, call that plugin's notification
     // handler
     for (let account of accounts) {
+      // emit event for global listeners
+      if (this.globalSubscription) {
+        co.wrap(this._handleGlobalNotification).call(this, account, notification)
+          .catch(err => {
+            debug('error in global event handler for %s: %s', account,
+              (err && err.stack) ? err.stack : err)
+          })
+      }
+
       const plugin = this.plugins.get(this.accountRegex.exec(account)[1])
       if (!plugin) continue
       debug('sending notification to ' + account)
@@ -102,9 +112,6 @@ class PluginFactory extends EventEmitter2 {
             (err && err.stack) ? err.stack : err)
         })
     }
-
-    // emit event for global listeners
-    this.emit('notification', notification)
   }
 
   disconnect () {
@@ -200,6 +207,21 @@ class PluginFactory extends EventEmitter2 {
       accounts.push(plugin.account)
     }
     return accounts
+  }
+
+  * _handleGlobalNotification (account, notification) {
+    const eventParams = translateBellsToPluginApi(
+      notification,
+      account,
+      this.ledgerContext
+    )
+
+    // Inject the account as the first parameter
+    const eventType = eventParams[0]
+    const eventAdditionalParams = eventParams.slice(1)
+    const accountIlpAddress = this.ledgerContext.prefix + this.ledgerContext.accountUriToName(account)
+    const eventGlobalParams = [eventType, accountIlpAddress].concat(eventAdditionalParams)
+    yield this.emitAsync.apply(this, eventGlobalParams)
   }
 }
 
