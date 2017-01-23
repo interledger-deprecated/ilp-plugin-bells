@@ -77,6 +77,32 @@ describe('Connection methods', function () {
       return this.plugin.connect().should.be.rejected
     })
 
+    it('rejects with ExternalError when info returns 500', function () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(500)
+      return this.plugin.connect().should.be.rejectedWith(ExternalError, /Unable to determine ledger precision/)
+    })
+
+    it('rejects with ExternalError when info is missing precision', function () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, {scale: 4})
+      return this.plugin.connect().should.be.rejectedWith(ExternalError, /Unable to determine ledger precision/)
+    })
+
     it('ignores if called twice in series', function * () {
       nock('http://red.example')
         .get('/auth_token')
@@ -238,6 +264,58 @@ describe('Connection methods', function () {
           .reply(200, this.webfinger)
 
         return assert.isRejected(this.plugin.connect(), /failed to get essential fields/)
+      })
+    })
+
+    describe('info', function () {
+      it('loads the info from the ledger metadata', function * () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+        nock('http://red.example')
+          .get('/auth_token')
+          .reply(200, {token: 'abc'})
+        nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+        yield this.plugin.connect()
+        assert.deepEqual(this.plugin.getInfo(), {
+          prefix: 'example.red.',
+          connectors: ['example.red.mark'],
+          currencyCode: 'USD',
+          currencySymbol: '$',
+          precision: 2,
+          scale: 4
+        })
+      })
+
+      it('throws an ExternalError when info returns 500', function () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+        nock('http://red.example')
+          .get('/')
+          .reply(500)
+        return assert.isRejected(this.plugin.connect(), ExternalError, /Unable to determine ledger precision/)
+      })
+
+      it('throws an ExternalError when the precision is missing', function () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+        nock('http://red.example')
+          .get('/')
+          .reply(200, {scale: 4})
+        return assert.isRejected(this.plugin.connect(), ExternalError, /Unable to determine ledger precision/)
       })
     })
 
@@ -599,7 +677,9 @@ describe('Connection methods', function () {
 
   describe('getAccount (not connected)', function () {
     it('throws if not connected', function * () {
-      return assert.isRejected(this.plugin.getAccount(), /Must be connected before getAccount can be called/)
+      assert.throws(() => {
+        this.plugin.getAccount()
+      }, /Must be connected before getAccount can be called/)
     })
   })
 

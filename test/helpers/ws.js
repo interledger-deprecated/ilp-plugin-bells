@@ -19,7 +19,9 @@ class MockWebSocket extends EventEmitter {
   }
 
   send (msg) {
-    this.sock.send(msg)
+    process.nextTick(() => {
+      this.sock.send(msg)
+    })
   }
 
   handleOpen () {
@@ -31,7 +33,9 @@ class MockWebSocket extends EventEmitter {
   }
 
   handleMessage (evt) {
-    this.emit('message', evt.data, {})
+    process.nextTick(() => {
+      this.emit('message', evt.data, {})
+    })
   }
 
   handleError (err) {

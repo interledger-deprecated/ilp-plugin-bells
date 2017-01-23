@@ -10,7 +10,6 @@ const mock = require('mock-require')
 const nock = require('nock')
 const wsHelper = require('./helpers/ws')
 const cloneDeep = require('lodash/cloneDeep')
-const ExternalError = require('../src/errors/external-error')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -58,50 +57,30 @@ describe('Info methods', function () {
   })
 
   describe('getInfo', function () {
-    it('gets the precision and scale', function * () {
+    it('gets the precision and scale', function () {
       const info = {
-        connectors: [{
-          id: 'http://red.example/accounts/mark',
-          name: 'mark',
-          connector: 'http://connector.example'
-        }],
+        prefix: 'example.red.',
+        connectors: ['example.red.mark'],
         currencyCode: 'USD',
         currencySymbol: '$',
         precision: 2,
         scale: 4
       }
-      yield assert.eventually.deepEqual(this.plugin.getInfo(), info)
-      // The result is cached.
-      yield assert.eventually.deepEqual(this.plugin.getInfo(), info)
+      assert.deepEqual(this.plugin.getInfo(), info)
     })
 
-    it.skip('throws an ExternalError on 500', function () {
-      nock('http://red.example')
-        .get('/')
-        .reply(500)
-      return assert.isRejected(this.plugin.getInfo(), ExternalError, /Unable to determine ledger precision/)
-    })
-
-    it.skip('throws an ExternalError when the precision is missing', function () {
-      nock('http://red.example')
-        .get('/')
-        .reply(200, {scale: 4})
-      return assert.isRejected(this.plugin.getInfo(), ExternalError, /Unable to determine ledger precision/)
-    })
-  })
-
-  describe('getPrefix', function () {
-    it('returns the plugin\'s prefix', function * () {
-      yield assert.isFulfilled(this.plugin.getPrefix(), 'example.red.')
-    })
-
-    it('fails without any prefix', function * () {
+    it('throws if not connected', function * () {
       const plugin = new PluginBells({
-        // no prefix
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      return assert.isRejected(plugin.getPrefix(), /Must be connected before getPrefix can be called/)
+      assert.throws(() => {
+        plugin.getInfo()
+      }, 'Must be connected before getInfo can be called')
+    })
+
+    it('includes the plugin\'s prefix', function * () {
+      assert.equal(this.plugin.getInfo().prefix, 'example.red.')
     })
 
     it('cannot connect without any prefix', function * () {
@@ -199,14 +178,14 @@ describe('Info methods', function () {
       this.wsRedLedger = wsHelper.makeServer('ws://blue.example/websocket?token=abc')
 
       yield plugin.connect()
-      yield assert.isFulfilled(plugin.getPrefix(), 'example.blue.')
+      assert.equal(plugin.getInfo().prefix, 'example.blue.')
       yield plugin.disconnect()
     })
   })
 
   describe('getAccount', function () {
     it('returns the plugin\'s account', function * () {
-      yield assert.isFulfilled(this.plugin.getAccount(), 'example.red.mike')
+      assert.equal(this.plugin.getAccount(), 'example.red.mike')
     })
 
     it('fails without any prefix', function () {
@@ -215,7 +194,9 @@ describe('Info methods', function () {
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      return assert.isRejected(plugin.getAccount(), /Must be connected before getAccount can be called/)
+      assert.throws(() => {
+        plugin.getAccount()
+      }, /Must be connected before getAccount can be called/)
     })
   })
 
