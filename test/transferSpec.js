@@ -155,7 +155,7 @@ describe('Transfer methods', function () {
         amount: '123',
         noteToSelf: {source: 'something'},
         data: {foo: 'bar'}
-      }), /^InvalidFieldsError: Destination address "red.alice" must start with ledger prefix "example.red."$/)
+      }), errors.InvalidFieldsError, /^Destination address "red.alice" must start with ledger prefix "example.red."$/)
     })
 
     it('throws an InvalidFieldsError on InvalidBodyError', function (done) {
@@ -390,8 +390,7 @@ describe('Transfer methods', function () {
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(500)
-      return assert.isRejected(this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ'),
-        /ExternalError: Failed to submit fulfillment for transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c Error: undefined/)
+      return assert.isRejected(this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ'), errors.ExternalError, /Failed to submit fulfillment for transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c Error: undefined/)
     })
 
     it('throws an Error when not connected', function () {
@@ -443,7 +442,7 @@ describe('Transfer methods', function () {
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(500)
-      return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), /ExternalError: Remote error: status=500/)
+      return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), errors.ExternalError, /Remote error: status=500/)
     })
 
     it('throws an ExternalError on error', function * () {
@@ -451,7 +450,7 @@ describe('Transfer methods', function () {
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
         .basicAuth({user: 'mike', pass: 'mike'})
         .replyWithError('broken')
-      return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), /ExternalError: Remote error: message=broken/)
+      return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), errors.ExternalError, /Remote error: message=broken/)
     })
 
     it('throws an Error when not connected', function () {
@@ -479,28 +478,28 @@ describe('Transfer methods', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(422, {id: 'UnauthorizedError', message: 'error'})
-      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /NotAcceptedError: error/)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), errors.NotAcceptedError, /error/)
     })
 
     it('throws TransferNotFoundError on NotFoundError', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(404, {id: 'NotFoundError', message: 'error'})
-      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /TransferNotFoundError: error/)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), errors.TransferNotFoundError, /error/)
     })
 
     it('throws AlreadyFulfilledError on InvalidModificationError', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(404, {id: 'InvalidModificationError', message: 'error'})
-      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /AlreadyFulfilledError: error/)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), errors.AlreadyFulfilledError, /error/)
     })
 
     it('throws ExternalError on 500', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
         .reply(500)
-      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /ExternalError: Remote error: status=500/)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), errors.ExternalError, /Remote error: status=500/)
     })
 
     it('throws an Error when not connected', function () {
@@ -513,4 +512,3 @@ describe('Transfer methods', function () {
     })
   })
 })
-

@@ -98,6 +98,8 @@ describe('Notification handling', function () {
       id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
       direction: 'incoming',
       account: 'example.red.alice',
+      from: 'example.red.alice',
+      to: 'example.red.mike',
       amount: '10',
       expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
     }
@@ -106,6 +108,8 @@ describe('Notification handling', function () {
     this.message = {
       ledger: 'example.red.',
       account: 'example.red.alice',
+      from: 'example.red.mike',
+      to: 'example.red.alice',
       data: {foo: 'bar'}
     }
   })
@@ -264,6 +268,8 @@ describe('Notification handling', function () {
         id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
         direction: 'incoming',
         account: 'example.red.alice',
+        from: 'example.red.alice',
+        to: 'example.red.mike',
         ledger: 'example.red.',
         amount: '10'
       }
@@ -392,6 +398,8 @@ describe('Notification handling', function () {
         id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
         direction: 'outgoing',
         account: 'example.red.alice',
+        from: 'example.red.mike',
+        to: 'example.red.alice',
         ledger: 'example.red.',
         amount: '10'
       }

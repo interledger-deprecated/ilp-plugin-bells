@@ -128,7 +128,7 @@ describe('Connection methods', function () {
         .get('/accounts/mike')
         .reply(200, { name: 'mike' })
 
-      return assert.isRejected(this.plugin.connect(), /Error: Failed to resolve ledger URI from account URI/)
+      return assert.isRejected(this.plugin.connect(), /Failed to resolve ledger URI from account URI/)
     })
 
     it('should set the username based on the account name returned', function * () {
@@ -217,7 +217,7 @@ describe('Connection methods', function () {
           .get('/.well-known/webfinger?resource=acct:mike@red.example')
           .reply(200, this.webfinger)
 
-        return assert.isRejected(this.plugin.connect(), /Error: subject \(/)
+        return assert.isRejected(this.plugin.connect(), /subject \(/)
       })
 
       it('fails to connect a plugin without webfinger links', function () {
@@ -227,7 +227,7 @@ describe('Connection methods', function () {
           .get('/.well-known/webfinger?resource=acct:mike@red.example')
           .reply(200, this.webfinger)
 
-        return assert.isRejected(this.plugin.connect(), /Error: result body doesn't contain links \(/)
+        return assert.isRejected(this.plugin.connect(), /result body doesn't contain links \(/)
       })
 
       it('fails to connect a plugin without necessary fields', function () {
@@ -237,7 +237,7 @@ describe('Connection methods', function () {
           .get('/.well-known/webfinger?resource=acct:mike@red.example')
           .reply(200, this.webfinger)
 
-        return assert.isRejected(this.plugin.connect(), /Error: failed to get essential fields/)
+        return assert.isRejected(this.plugin.connect(), /failed to get essential fields/)
       })
     })
 
@@ -269,7 +269,7 @@ describe('Connection methods', function () {
         .reply(200, Object.assign({}, this.infoRedLedger, {urls: urls}))
 
       yield this.plugin.connect()
-      assert.deepEqual(this.plugin.urls, _.pick(urls, [
+      assert.deepEqual(this.plugin.ledgerContext.urls, _.pick(urls, [
         'transfer',
         'transfer_fulfillment',
         'transfer_rejection',
@@ -551,7 +551,7 @@ describe('Connection methods', function () {
         .reply(404)
 
       return assert.isRejected(this.plugin.connect(),
-        /Error: Unable to connect to account/)
+        /Unable to connect to account/)
     })
 
     it('fails if the retries exceed the timeout', function () {
@@ -559,7 +559,7 @@ describe('Connection methods', function () {
         .get('/accounts/mike')
         .replyWithError('fail')
       return assert.isRejected(this.plugin.connect({timeout: 1000}),
-        /Error: Unable to connect to account: timeout/)
+        /Unable to connect to account: timeout/)
     })
 
     it('fails when options.timeout is invalid', function () {
@@ -599,7 +599,7 @@ describe('Connection methods', function () {
 
   describe('getAccount (not connected)', function () {
     it('throws if not connected', function * () {
-      return assert.isRejected(this.plugin.getAccount(), /Error: Must be connected before getAccount can be called/)
+      return assert.isRejected(this.plugin.getAccount(), /Must be connected before getAccount can be called/)
     })
   })
 
@@ -630,4 +630,3 @@ describe('Connection methods', function () {
     })
   })
 })
-

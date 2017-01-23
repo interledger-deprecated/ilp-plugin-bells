@@ -8,19 +8,17 @@ const reconnectCore = require('reconnect-core')
 const debug = require('debug')('ilp-plugin-bells:plugin')
 const errors = require('../errors')
 const ExternalError = require('../errors/external-error')
-const UnrelatedNotificationError = require('../errors/unrelated-notification-error')
 const UnreachableError = require('../errors/unreachable-error')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
 const isNil = require('lodash/fp/isNil')
 const omitNil = require('lodash/fp/omitBy')(isNil)
 const startsWith = require('lodash/fp/startsWith')
-const find = require('lodash/find')
+const translateBellsToPluginApi = require('./translate').translateBellsToPluginApi
+const LedgerContext = require('./ledger-context')
 
 const backoffMin = 1000
 const backoffMax = 30000
 const defaultConnectTimeout = 60000
-
-const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'auth_token', 'websocket', 'message' ]
 
 function wait (ms) {
   return function (done) {
@@ -103,7 +101,6 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     this.configPrefix = options.prefix
-    this.host = options.host || null
 
     this.account = options.account
     this.username = options.username
@@ -137,7 +134,6 @@ class FiveBellsLedger extends EventEmitter2 {
     // `connected` is set while a websocket connection is active.
     this.connected = false
     this.ws = null
-    this.urls = null
     this.on('_rpc:notification', (notif) =>
       co.wrap(this._handleNotification).call(this, notif))
   }
@@ -201,33 +197,33 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!res.body.ledger) {
       throw new Error('Failed to resolve ledger URI from account URI')
     }
-    this.host = res.body.ledger
+    const host = res.body.ledger
     // Set the username but don't overwrite the username in case it was provided
     if (!this.credentials.username || !this.username) {
       this.username = this.credentials.username = res.body.name
     }
 
     // Resolve ledger metadata
-    const ledgerMetadata = yield this._fetchLedgerMetadata()
-    this.urls = parseAndValidateLedgerUrls(ledgerMetadata.urls)
-    debug('using service urls:', this.urls)
+    const ledgerMetadata = yield this._fetchLedgerMetadata(host)
+    this.ledgerContext = new LedgerContext(host, ledgerMetadata)
 
     // Set ILP prefix
-    const ledgerPrefix = ledgerMetadata.ilp_prefix
-    this.prefix = this.configPrefix || ledgerMetadata.ilp_prefix
-
+    const ledgerPrefix = this.ledgerContext.prefix
+    if (this.configPrefix) {
+      this.ledgerContext.prefix = this.configPrefix
+    }
     if (ledgerPrefix && this.configPrefix && ledgerPrefix !== this.configPrefix) {
       console.warn('ilp-plugin-bells: ledger prefix (' + ledgerPrefix +
         ') does not match locally configured prefix (' + this.configPrefix + ')')
     }
-    if (!this.prefix) {
+    if (!this.ledgerContext.prefix) {
       throw new Error('Unable to set prefix from ledger or from local config')
     }
     this.ready = true
 
     const authToken = yield this._getAuthToken()
     if (!authToken) throw new Error('Unable to get auth token from ledger')
-    const notificationsUrl = this.urls.websocket + '?token=' + encodeURIComponent(authToken)
+    const notificationsUrl = this.ledgerContext.urls.websocket + '?token=' + encodeURIComponent(authToken)
     const reconnect = reconnectCore(() => {
       return new WebSocket(notificationsUrl)
     })
@@ -324,28 +320,21 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getInfo () {
-    if (this.info) return this.info
-    const ledgerMetadata = yield this._fetchLedgerMetadata()
-
-    this.info = {
-      connectors: ledgerMetadata.connectors,
-      precision: ledgerMetadata.precision,
-      scale: ledgerMetadata.scale,
-      currencyCode: ledgerMetadata.currency_code,
-      currencySymbol: ledgerMetadata.currency_symbol
+    if (!this.ready) {
+      return Promise.reject(new Error('Must be connected before getPrefix can be called'))
     }
-    return this.info
+    return this.ledgerContext.info
   }
 
-  * _fetchLedgerMetadata () {
-    debug('request ledger metadata %s', this.host)
+  * _fetchLedgerMetadata (host) {
+    debug('request ledger metadata %s', host)
     function throwErr () {
       throw new ExternalError('Unable to determine ledger precision')
     }
 
     let res
     try {
-      res = yield request(this.host, {json: true})
+      res = yield request(host, {json: true})
     } catch (e) {
       if (!res || res.statusCode !== 200) {
         debug('getInfo error %s', e)
@@ -360,11 +349,11 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   getPrefix () {
-    if (this.prefix) {
-      return Promise.resolve(this.prefix)
-    }
     if (!this.ready) {
       return Promise.reject(new Error('Must be connected before getPrefix can be called'))
+    }
+    if (this.ledgerContext.prefix) {
+      return Promise.resolve(this.ledgerContext.prefix)
     }
     return Promise.reject(new Error('Prefix has not been set'))
   }
@@ -373,17 +362,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.ready) {
       return Promise.reject(new Error('Must be connected before getAccount can be called'))
     }
-    return Promise.resolve(this.prefix + this.accountUriToName(this.account))
-  }
-
-  _validateTransfer (transfer) {
-    // validator.validate('TransferTemplate', transfer)
-  }
-
-  _validateMessage (message) {
-    if (message.ledger !== this.host) {
-      throw new UnrelatedNotificationError('Notification does not seem related to connector')
-    }
+    return Promise.resolve(this.ledgerContext.prefix + this.ledgerContext.accountUriToName(this.account))
   }
 
   getBalance () {
@@ -425,7 +404,7 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.ready) {
       throw new Error('Must be connected before sendMessage can be called')
     }
-    if (message.ledger !== this.prefix) {
+    if (message.ledger !== this.ledgerContext.prefix) {
       throw new errors.InvalidFieldsError('invalid ledger')
     }
     if (typeof message.account !== 'string') {
@@ -437,16 +416,16 @@ class FiveBellsLedger extends EventEmitter2 {
 
     const destinationAddress = yield this.parseAddress(message.account)
     const fiveBellsMessage = {
-      ledger: this.host,
-      from: this.urls.account.replace(':name', encodeURIComponent(this.username)),
-      to: this.urls.account.replace(':name', encodeURIComponent(destinationAddress.username)),
+      ledger: this.ledgerContext.host,
+      from: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(this.username)),
+      to: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(destinationAddress.username)),
       data: message.data
     }
 
     const sendRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'post',
-        uri: this.urls.message,
+        uri: this.ledgerContext.urls.message,
         body: fiveBellsMessage,
         json: true
       }))
@@ -476,8 +455,8 @@ class FiveBellsLedger extends EventEmitter2 {
 
     const sourceAddress = yield this.parseAddress(transfer.account)
     const fiveBellsTransfer = omitNil({
-      id: this.urls.transfer.replace(':id', transfer.id),
-      ledger: this.host,
+      id: this.ledgerContext.urls.transfer.replace(':id', transfer.id),
+      ledger: this.ledgerContext.host,
       debits: [omitNil({
         account: this.account,
         amount: transfer.amount,
@@ -485,7 +464,7 @@ class FiveBellsLedger extends EventEmitter2 {
         memo: transfer.noteToSelf
       })],
       credits: [omitNil({
-        account: this.urls.account.replace(':name', encodeURIComponent(sourceAddress.username)),
+        account: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(sourceAddress.username)),
         amount: transfer.amount,
         memo: transfer.data
       })],
@@ -502,7 +481,7 @@ class FiveBellsLedger extends EventEmitter2 {
         const res = yield request({
           method: 'POST',
           uri: caseUri + '/targets',
-          body: [ this.urls.transfer_fulfillment.replace(':id', transfer.id) ],
+          body: [ this.ledgerContext.urls.transfer_fulfillment.replace(':id', transfer.id) ],
           json: true
         })
 
@@ -545,7 +524,7 @@ class FiveBellsLedger extends EventEmitter2 {
     const fulfillmentRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'put',
-        uri: this.urls.transfer_fulfillment.replace(':id', transferId),
+        uri: this.ledgerContext.urls.transfer_fulfillment.replace(':id', transferId),
         body: conditionFulfillment,
         headers: {
           'content-type': 'text/plain'
@@ -589,7 +568,7 @@ class FiveBellsLedger extends EventEmitter2 {
     try {
       res = yield request(Object.assign({
         method: 'get',
-        uri: this.urls.transfer_fulfillment.replace(':id', transferId),
+        uri: this.ledgerContext.urls.transfer_fulfillment.replace(':id', transferId),
         json: true
       }, requestCredentials(this.credentials)))
     } catch (err) {
@@ -622,7 +601,7 @@ class FiveBellsLedger extends EventEmitter2 {
     const rejectionRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'put',
-        uri: this.urls.transfer_rejection.replace(':id', transferId),
+        uri: this.ledgerContext.urls.transfer_rejection.replace(':id', transferId),
         body: rejectionMessage
       }))
     const body = getResponseJSON(rejectionRes)
@@ -662,6 +641,12 @@ class FiveBellsLedger extends EventEmitter2 {
     })
   }
 
+  _subscribeAllAccounts () {
+    return this._sendRpcRequest('subscribe_all_accounts', {
+      eventType: '*'
+    })
+  }
+
   * _handleIncomingRpcMessage (rpcMessage) {
     // RpcResponse
     if (!rpcMessage.method) {
@@ -677,148 +662,12 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _handleNotification (notification) {
-    const event = notification.event
-    const data = notification.resource
-    if (event === 'transfer.create' || event === 'transfer.update') {
-      debug('notify transfer', data.state, data.id)
-      return yield this._handleTransferNotification(data, notification.related_resources)
-    } else if (event === 'message.send') {
-      debug('notify message', data.account)
-      return yield this._handleMessageNotification(data)
-    } else {
-      throw new UnrelatedNotificationError('Invalid notification event: ' + event)
-    }
-  }
-
-  * _handleTransferNotification (fiveBellsTransfer, relatedResources) {
-    this._validateTransfer(fiveBellsTransfer)
-
-    let handled = false
-    for (let credit of fiveBellsTransfer.credits) {
-      if (credit.account === this.account) {
-        handled = true
-
-        const transfer = omitNil({
-          id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
-          direction: 'incoming',
-          // TODO: What if there are multiple debits?
-          account: this.prefix + this.accountUriToName(fiveBellsTransfer.debits[0].account),
-          ledger: this.prefix,
-          amount: credit.amount,
-          data: credit.memo,
-          executionCondition: fiveBellsTransfer.execution_condition,
-          cancellationCondition: fiveBellsTransfer.cancellation_condition,
-          expiresAt: fiveBellsTransfer.expires_at,
-          cases: fiveBellsTransfer.additional_info && fiveBellsTransfer.additional_info.cases
-            ? fiveBellsTransfer.additional_info.cases
-            : undefined
-        })
-
-        if (fiveBellsTransfer.state === 'prepared') {
-          yield this.emitAsync('incoming_prepare', transfer)
-        }
-        if (fiveBellsTransfer.state === 'executed' && !transfer.executionCondition) {
-          yield this.emitAsync('incoming_transfer', transfer)
-        }
-
-        if (fiveBellsTransfer.state === 'executed' && relatedResources &&
-            relatedResources.execution_condition_fulfillment) {
-          yield this.emitAsync('incoming_fulfill', transfer,
-            relatedResources.execution_condition_fulfillment)
-        }
-
-        if (fiveBellsTransfer.state === 'rejected' && relatedResources &&
-            relatedResources.cancellation_condition_fulfillment) {
-          yield this.emitAsync('incoming_cancel', transfer,
-            relatedResources.cancellation_condition_fulfillment)
-        } else if (fiveBellsTransfer.state === 'rejected') {
-          const rejectedCredit = find(fiveBellsTransfer.credits, 'rejected')
-          if (rejectedCredit) {
-            yield this.emitAsync('incoming_reject', transfer,
-              new Buffer(rejectedCredit.rejection_message, 'base64').toString())
-          } else {
-            yield this.emitAsync('incoming_cancel', transfer, 'transfer timed out.')
-          }
-        }
-      }
-    }
-
-    for (let debit of fiveBellsTransfer.debits) {
-      if (debit.account === this.account) {
-        handled = true
-
-        // This connector only launches transfers with one credit, so there
-        // should never be more than one credit.
-        const credit = fiveBellsTransfer.credits[0]
-
-        const transfer = omitNil({
-          id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
-          direction: 'outgoing',
-          account: this.prefix + this.accountUriToName(credit.account),
-          ledger: this.prefix,
-          amount: debit.amount,
-          data: credit.memo,
-          noteToSelf: debit.memo,
-          executionCondition: fiveBellsTransfer.execution_condition,
-          cancellationCondition: fiveBellsTransfer.cancellation_condition,
-          expiresAt: fiveBellsTransfer.expires_at,
-          cases: fiveBellsTransfer.additional_info && fiveBellsTransfer.additional_info.cases
-            ? fiveBellsTransfer.additional_info.cases
-            : undefined
-        })
-
-        if (fiveBellsTransfer.state === 'prepared') {
-          yield this.emitAsync('outgoing_prepare', transfer)
-        }
-        if (fiveBellsTransfer.state === 'executed' && !transfer.executionCondition) {
-          yield this.emitAsync('outgoing_transfer', transfer)
-        }
-
-        if (fiveBellsTransfer.state === 'executed' && relatedResources &&
-            relatedResources.execution_condition_fulfillment) {
-          yield this.emitAsync('outgoing_fulfill', transfer,
-            relatedResources.execution_condition_fulfillment)
-        }
-
-        if (fiveBellsTransfer.state === 'rejected' && relatedResources &&
-            relatedResources.cancellation_condition_fulfillment) {
-          yield this.emitAsync('outgoing_cancel', transfer,
-            relatedResources.cancellation_condition_fulfillment)
-        } else if (fiveBellsTransfer.state === 'rejected') {
-          const rejectedCredit = find(fiveBellsTransfer.credits, 'rejected')
-          if (rejectedCredit) {
-            yield this.emitAsync('outgoing_reject', transfer,
-              new Buffer(rejectedCredit.rejection_message, 'base64').toString())
-          } else {
-            yield this.emitAsync('outgoing_cancel', transfer, 'transfer timed out.')
-          }
-        }
-      }
-    }
-    if (!handled) {
-      throw new UnrelatedNotificationError('Notification does not seem related to connector')
-    }
-  }
-
-  _handleMessageNotification (message) {
-    this._validateMessage(message)
-    return this.emitAsync('incoming_message', {
-      ledger: this.prefix,
-      account: this.prefix + this.accountUriToName(message.account || message.to),
-      data: message.data
-    })
-  }
-
-  /**
-   * Get the account name from "http://red.example/accounts/alice" (where
-   * accountUriTemplate is "http://red.example/accounts/:name").
-   */
-  accountUriToName (accountURI) {
-    const templatePath = parseURL(this.urls.account).path.split('/')
-    const accountPath = parseURL(accountURI).path.split('/')
-    for (let i = 0; i < templatePath.length; i++) {
-      if (templatePath[i] === ':name') return accountPath[i]
-    }
+    const eventParams = translateBellsToPluginApi(
+      notification,
+      this.account,
+      this.ledgerContext
+    )
+    yield this.emitAsync.apply(this, eventParams)
   }
 
   * parseAddress (address) {
@@ -830,7 +679,7 @@ class FiveBellsLedger extends EventEmitter2 {
         'with ledger prefix "' + prefix + '"')
     }
 
-    const addressParts = address.substr(this.prefix.length).split('.')
+    const addressParts = address.substr(prefix.length).split('.')
     return {
       ledger: prefix,
       username: addressParts.slice(0, 1).join('.'),
@@ -842,7 +691,7 @@ class FiveBellsLedger extends EventEmitter2 {
     const authTokenRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'get',
-        uri: this.urls.auth_token
+        uri: this.ledgerContext.urls.auth_token
       }))
     const body = getResponseJSON(authTokenRes)
     return body && body.token
@@ -872,32 +721,6 @@ function getResponseJSON (res) {
   if (!contentType) return
   if (contentType.indexOf('application/json') !== 0) return
   return JSON.parse(res.body)
-}
-
-function parseAndValidateLedgerUrls (metadataUrls) {
-  if (!metadataUrls) {
-    throw new ExternalError('ledger metadata does not include a urls map')
-  }
-
-  const urls = {}
-  REQUIRED_LEDGER_URLS.forEach((service) => {
-    if (!metadataUrls[service]) {
-      throw new ExternalError('ledger metadata does not include ' + service + ' url')
-    }
-
-    if (service === 'websocket') {
-      if (metadataUrls[service].indexOf('ws') !== 0) {
-        throw new ExternalError('ledger metadata ' + service + ' url must be a full ws(s) url')
-      }
-    } else {
-      if (metadataUrls[service].indexOf('http') !== 0) {
-        throw new ExternalError('ledger metadata ' + service + ' url must be a full http(s) url')
-      }
-    }
-    urls[service] = metadataUrls[service]
-  })
-
-  return urls
 }
 
 module.exports = FiveBellsLedger
