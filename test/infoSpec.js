@@ -10,7 +10,6 @@ const mock = require('mock-require')
 const nock = require('nock')
 const wsHelper = require('./helpers/ws')
 const cloneDeep = require('lodash/cloneDeep')
-const ExternalError = require('../src/errors/external-error')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -68,20 +67,6 @@ describe('Info methods', function () {
         scale: 4
       }
       assert.deepEqual(this.plugin.getInfo(), info)
-    })
-
-    it.skip('throws an ExternalError on 500', function () {
-      nock('http://red.example')
-        .get('/')
-        .reply(500)
-      return assert.isRejected(this.plugin.getInfo(), ExternalError, /Unable to determine ledger precision/)
-    })
-
-    it.skip('throws an ExternalError when the precision is missing', function () {
-      nock('http://red.example')
-        .get('/')
-        .reply(200, {scale: 4})
-      return assert.isRejected(this.plugin.getInfo(), ExternalError, /Unable to determine ledger precision/)
     })
 
     it('throws if not connected', function * () {
