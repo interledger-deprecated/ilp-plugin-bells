@@ -51,11 +51,15 @@ const translateTransferNotification = (
     if (credit.account === account) {
       handled = true
 
+      // TODO: What if there are multiple debits?
+      const debit = fiveBellsTransfer.debits[0]
+
       const transfer = omitNil({
         id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
         direction: 'incoming',
-        // TODO: What if there are multiple debits?
-        account: ledgerContext.prefix + ledgerContext.accountUriToName(fiveBellsTransfer.debits[0].account),
+        account: ledgerContext.prefix + ledgerContext.accountUriToName(debit.account),
+        from: ledgerContext.prefix + ledgerContext.accountUriToName(debit.account),
+        to: ledgerContext.prefix + ledgerContext.accountUriToName(credit.account),
         ledger: ledgerContext.prefix,
         amount: credit.amount,
         data: credit.memo,
@@ -100,14 +104,17 @@ const translateTransferNotification = (
     if (debit.account === account) {
       handled = true
 
-      // This connector only launches transfers with one credit, so there
-      // should never be more than one credit.
+      // ILP transfers contain one credit and one debit
+      // TODO: Perhaps this method should filter out transfers with multiple
+      //       credits/debits?
       const credit = fiveBellsTransfer.credits[0]
 
       const transfer = omitNil({
         id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
         direction: 'outgoing',
         account: ledgerContext.prefix + ledgerContext.accountUriToName(credit.account),
+        from: ledgerContext.prefix + ledgerContext.accountUriToName(debit.account),
+        to: ledgerContext.prefix + ledgerContext.accountUriToName(credit.account),
         ledger: ledgerContext.prefix,
         amount: debit.amount,
         data: credit.memo,
@@ -155,11 +162,14 @@ const translateTransferNotification = (
 
 const translateMessageNotification = (message, account, ledgerContext) => {
   validateMessage(message, ledgerContext)
+  console.log('message', message)
   return [
     'incoming_message',
     {
       ledger: ledgerContext.prefix,
       account: ledgerContext.prefix + ledgerContext.accountUriToName(message.account || message.to),
+      from: ledgerContext.prefix + ledgerContext.accountUriToName(message.from),
+      to: ledgerContext.prefix + ledgerContext.accountUriToName(message.account || message.to),
       data: message.data
     }
   ]
