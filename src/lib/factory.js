@@ -66,6 +66,7 @@ class PluginFactory extends EventEmitter2 {
     }])
 
     if (this.globalSubscription) {
+      debug('subscribing to all accounts')
       this.adminPlugin._subscribeAllAccounts()
     }
 
