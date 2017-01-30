@@ -220,8 +220,8 @@ class PluginFactory extends EventEmitter2 {
     // Inject the account as the first parameter
     const eventType = eventParams[0]
     const eventAdditionalParams = eventParams.slice(1)
-    const accountIlpAddress = this.ledgerContext.prefix + this.ledgerContext.accountUriToName(account)
-    const eventGlobalParams = [eventType, accountIlpAddress].concat(eventAdditionalParams)
+    const accountName = this.ledgerContext.accountUriToName(account)
+    const eventGlobalParams = [eventType, accountName].concat(eventAdditionalParams)
     yield this.emitAsync.apply(this, eventGlobalParams)
   }
 }
