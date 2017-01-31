@@ -215,6 +215,24 @@ describe('PluginBellsFactory', function () {
         assert.equal(this.plugin, plugin, 'only one plugin should be made per account')
       })
 
+      it('will create a plugin with account', function * () {
+        assert.isObject(this.plugin)
+        assert.isTrue(this.plugin.isConnected())
+
+        const plugin = yield this.factory.create({ account: 'http://red.example/accounts/mike' })
+        assert.equal(this.plugin, plugin, 'account should resolve to same username')
+      })
+
+      it('throws an error when account and username are both supplied', function (done) {
+        this.factory.create({
+          username: 'mike',
+          account: 'http://red.example/accounts/mike'
+        }).catch((err) => {
+          assert.equal(err.message, 'account and username can\'t both be suppplied')
+          done()
+        }).catch(done)
+      })
+
       it('subscribes to the new account', function (done) {
         nock('http://red.example')
           .get('/accounts/mary')
@@ -241,7 +259,7 @@ describe('PluginBellsFactory', function () {
 
       it('will throw if given an invalid opts.username', function (done) {
         this.factory.create({ username: 'foo!' }).catch((err) => {
-          assert.equal(err.message, 'Invalid opts.username')
+          assert.equal(err.message, 'Invalid username')
           done()
         })
       })
