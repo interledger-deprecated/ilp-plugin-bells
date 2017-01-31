@@ -52,7 +52,9 @@ factory.connect().then(() => {
 
   // `create` will make a new, connected, PluginBells instance. If a plugin is already
   // created for a given username, then the existing plugin is returned from `create`
+
   return factory.create({ username: 'alice' })
+  // { account: 'https://red.ilpdemo.org/ledger/accounts/alice' } is also valid
 
 }).then((plugin) => {
 

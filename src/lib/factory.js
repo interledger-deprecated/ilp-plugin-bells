@@ -123,6 +123,7 @@ class PluginFactory extends EventEmitter2 {
   /*
   * @param {object} opts plugin options
   * @param {string} opts.username username to create a plugin for
+  * @param {string} opts.account account URI, can be used in place of username
   */
   create (opts) {
     return co.wrap(this._create).call(this, opts)
@@ -132,19 +133,25 @@ class PluginFactory extends EventEmitter2 {
       throw new Error('Factory needs to be connected before \'create\'')
     }
 
-    if (typeof opts.username !== 'string' || !/^[A-Za-z0-9._-~]+$/.test(opts.username)) {
-      throw new Error('Invalid opts.username')
+    if (opts.account && opts.username) {
+      throw new Error('account and username can\'t both be suppplied')
+    }
+
+    const username = opts.account ? this.accountRegex.exec(opts.account)[1] : opts.username
+
+    if (typeof username !== 'string' || !/^[A-Za-z0-9._-~]+$/.test(username)) {
+      throw new Error('Invalid username')
     }
 
     // try to retrieve existing plugin
-    const existing = this.plugins.get(opts.username)
+    const existing = this.plugins.get(username)
     if (existing) return existing
 
     // parse endpoint to get URL
     const account = this.ledgerContext
       .urls
       .account
-      .replace('/:name', '/' + opts.username)
+      .replace('/:name', '/' + username)
 
     // make sure that the account exists
     const exists = yield request(account, {
@@ -161,7 +168,7 @@ class PluginFactory extends EventEmitter2 {
 
     // otherwise, create a new plugin
     const plugin = new Plugin({
-      username: opts.username,
+      username: username,
       password: null,
       account: account,
       credentials: {
@@ -182,7 +189,7 @@ class PluginFactory extends EventEmitter2 {
 
     plugin.ledgerContext = this.ledgerContext
 
-    this.plugins.set(opts.username, plugin)
+    this.plugins.set(username, plugin)
     if (!this.globalSubscription) {
       yield this.adminPlugin._subscribeAccounts(this._pluginAccounts())
     }
