@@ -154,7 +154,7 @@ describe('Connection methods', function () {
         .get('/accounts/mike')
         .reply(200, { name: 'mike' })
 
-      return assert.isRejected(this.plugin.connect(), /Failed to resolve ledger URI from account URI/)
+      return assert.isRejected(this.plugin.connect(), /Failed to fetch account details from/)
     })
 
     it('should set the username based on the account name returned', function * () {
