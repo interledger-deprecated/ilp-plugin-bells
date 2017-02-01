@@ -194,7 +194,11 @@ class FiveBellsLedger extends EventEmitter2 {
     })
 
     if (!res.body.ledger) {
-      throw new Error('Failed to resolve ledger URI from account URI')
+      throw new Error('Failed to fetch account details from "' +
+        accountUri +
+        '". Got: "' +
+        JSON.stringify(res.body) +
+        '"')
     }
     const host = res.body.ledger
     // Set the username but don't overwrite the username in case it was provided
