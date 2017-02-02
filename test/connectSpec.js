@@ -13,6 +13,7 @@ const wsHelper = require('./helpers/ws')
 const cloneDeep = require('lodash/cloneDeep')
 const _ = require('lodash')
 const ExternalError = require('../src/errors/external-error')
+const mockSocket = require('mock-socket')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
@@ -71,6 +72,25 @@ describe('Connection methods', function () {
 
       yield assert.isFulfilled(this.plugin.connect(), null, 'should be fulfilled with null')
       assert.isTrue(this.plugin.isConnected())
+    })
+
+    it('times out connection', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      this.wsRedLedger.stop()
+      this.wsRedLedger = new mockSocket.Server('ws://red.example/websocket?token=abc')
+      yield this.plugin.connect({ timeout: 10 }).should.be.rejectedWith(Error, /timed out before "connect"/)
     })
 
     it('doesn\'t connect when the "account" is invalid', function (done) {

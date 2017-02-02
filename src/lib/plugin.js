@@ -21,9 +21,13 @@ const backoffMax = 30000
 const defaultConnectTimeout = 60000
 
 function wait (ms) {
-  return function (done) {
-    setTimeout(done, ms)
+  if (ms === Infinity) {
+    return new Promise((resolve) => {})
   }
+
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }
 
 function * resolveWebfingerOptions (identifier) {
@@ -235,76 +239,92 @@ class FiveBellsLedger extends EventEmitter2 {
       return new WebSocket(notificationsUrl)
     })
 
-    return new Promise((resolve, reject) => {
-      this.connection = reconnect({immediate: true}, (ws) => {
-        ws.on('open', () => {
-          if (!this.connected) {
-            this.emit('connect')
-            this.connected = true
-          }
-          debug('ws connected to ' + notificationsUrl)
-        })
-        ws.on('message', (rpcMessageString) => {
-          let rpcMessage
-          try {
-            rpcMessage = JSON.parse(rpcMessageString)
-          } catch (err) {
-            debug('invalid notification', rpcMessageString)
-            return
-          }
+    const timeout = options.timeout
+    return Promise.race([
+      // if the timeout occurs before the websocket is successfully established,
+      // the connect function will throw an error.
+      wait(timeout).then(() => {
+        throw new Error('websocket connection to ' +
+          notificationsUrl +
+          ' timed out before "connect" RPC message was received (' +
+          timeout +
+          ' ms)')
+      }),
+      // open a websocket connection to the websockets notification URL,
+      // and wait for a "connect" RPC message on it.
+      new Promise((resolve, reject) => {
+        this.connection = reconnect({immediate: true}, (ws) => {
+          ws.on('open', () => {
+            debug('ws connected to ' + notificationsUrl)
+          })
+          ws.on('message', (rpcMessageString) => {
+            let rpcMessage
+            try {
+              rpcMessage = JSON.parse(rpcMessageString)
+            } catch (err) {
+              debug('invalid notification', rpcMessageString)
+              return
+            }
 
-          if (rpcMessage.method === 'connect') return resolve(null)
-          co.wrap(this._handleIncomingRpcMessage)
-            .call(this, rpcMessage)
-            .then(() => {
-              if (this.debugReplyNotifications) {
-                ws.send(JSON.stringify({ result: 'processed' }))
+            if (rpcMessage.method === 'connect') {
+              if (!this.connected) {
+                this.emit('connect')
+                this.connected = true
               }
-            })
-            .catch((err) => {
-              debug('failure while processing notification: ' +
-                (err && err.stack) ? err.stack : err)
-              if (this.debugReplyNotifications) {
-                ws.send(JSON.stringify({
-                  result: 'ignored',
-                  ignoreReason: {
-                    id: err.name,
-                    message: err.message
-                  }
-                }))
-              }
-            })
-        })
-        ws.on('error', () => {
-          debug('ws connection error on ' + notificationsUrl)
-          reject(new UnreachableError('websocket connection error'))
-        })
-        ws.on('close', () => {
-          this.connected = false
-          debug('ws disconnected from ' + notificationsUrl)
-          if (this.ready) {
+              return resolve(null)
+            }
+            co.wrap(this._handleIncomingRpcMessage)
+              .call(this, rpcMessage)
+              .then(() => {
+                if (this.debugReplyNotifications) {
+                  ws.send(JSON.stringify({ result: 'processed' }))
+                }
+              })
+              .catch((err) => {
+                debug('failure while processing notification: ' +
+                  (err && err.stack) ? err.stack : err)
+                if (this.debugReplyNotifications) {
+                  ws.send(JSON.stringify({
+                    result: 'ignored',
+                    ignoreReason: {
+                      id: err.name,
+                      message: err.message
+                    }
+                  }))
+                }
+              })
+          })
+          ws.on('error', () => {
+            debug('ws connection error on ' + notificationsUrl)
             reject(new UnreachableError('websocket connection error'))
-          }
-        })
+          })
+          ws.on('close', () => {
+            this.connected = false
+            debug('ws disconnected from ' + notificationsUrl)
+            if (this.ready) {
+              reject(new UnreachableError('websocket connection error'))
+            }
+          })
 
-        // reconnect-core expects the disconnect method to be called: `end`
-        ws.end = ws.close
-      })
-      this.connection
-        .on('connect', (ws) => {
-          this.ws = ws
+          // reconnect-core expects the disconnect method to be called: `end`
+          ws.end = ws.close
         })
-        .on('disconnect', () => {
-          this.connected = false
-          this.emit('disconnect')
-          this.ws = null
-        })
-        .on('error', (err) => {
-          debug('ws error on ' + notificationsUrl + ':', err)
-          reject(err)
-        })
-        .connect()
-    }).then(() => this._subscribeAccounts([this.account]))
+        this.connection
+          .on('connect', (ws) => {
+            this.ws = ws
+          })
+          .on('disconnect', () => {
+            this.connected = false
+            this.emit('disconnect')
+            this.ws = null
+          })
+          .on('error', (err) => {
+            debug('ws error on ' + notificationsUrl + ':', err)
+            reject(err)
+          })
+          .connect()
+      }).then(() => this._subscribeAccounts([this.account]))
+    ])
   }
 
   disconnect () {
