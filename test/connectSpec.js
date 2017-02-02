@@ -53,6 +53,26 @@ describe('Connection methods', function () {
       assert.isTrue(this.plugin.isConnected())
     })
 
+    it('retries if account gives 500', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(500)
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      yield assert.isFulfilled(this.plugin.connect(), null, 'should be fulfilled with null')
+      assert.isTrue(this.plugin.isConnected())
+    })
+
     it('doesn\'t connect when the "account" is invalid', function (done) {
       const plugin = new PluginBells({
         prefix: 'example.red.',

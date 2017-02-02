@@ -68,6 +68,10 @@ function * requestRetry (requestOptions, retryOptions) {
       const res = yield request(requestOptions)
       if (res.statusCode >= 400 && res.statusCode < 500) {
         break
+      } else if (res.statusCode >= 500) {
+        throw new Error(requestOptions.uri +
+          ' failed with status code ' +
+          res.statusCode)
       }
       return res
     } catch (err) {
