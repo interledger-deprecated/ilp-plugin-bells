@@ -167,9 +167,9 @@ const translateMessageNotification = (message, account, ledgerContext) => {
     'incoming_message',
     {
       ledger: ledgerContext.prefix,
-      account: ledgerContext.prefix + ledgerContext.accountUriToName(message.account || message.to),
+      account: ledgerContext.prefix + ledgerContext.accountUriToName(message.from),
       from: ledgerContext.prefix + ledgerContext.accountUriToName(message.from),
-      to: ledgerContext.prefix + ledgerContext.accountUriToName(message.account || message.to),
+      to: ledgerContext.prefix + ledgerContext.accountUriToName(message.to),
       data: message.data
     }
   ]

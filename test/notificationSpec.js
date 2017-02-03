@@ -492,7 +492,11 @@ describe('Notification handling', function () {
 
       yield new Promise((resolve) => this.wsRedLedger.on('message', resolve))
       sinon.assert.calledOnce(this.stubIncomingMessage)
-      sinon.assert.calledWith(this.stubIncomingMessage, this.message)
+
+      // the account on an incoming transfer should indicate the sender
+      sinon.assert.calledWith(this.stubIncomingMessage, Object.assign({},
+        this.message,
+        { account: this.message.from }))
     })
   })
 
