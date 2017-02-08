@@ -139,7 +139,7 @@ class PluginFactory extends EventEmitter2 {
 
     const username = opts.account ? this.accountRegex.exec(opts.account)[1] : opts.username
 
-    if (typeof username !== 'string' || !/^[A-Za-z0-9._-~]+$/.test(username)) {
+    if (typeof username !== 'string' || !/^[a-z0-9]([a-z0-9]|[-](?!-)){0,18}[a-z0-9]$/.test(username)) {
       throw new Error('Invalid username')
     }
 
