@@ -270,65 +270,65 @@ describe('Transfer methods', function () {
   describe('fulfillCondition', function () {
     it('throws InvalidFieldsError on InvalidBodyError', function (done) {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oAKAAA')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(422, {id: 'InvalidBodyError', message: 'fail'})
-      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'oAKAAA')
         .should.be.rejectedWith(errors.InvalidFieldsError, 'fail')
         .notify(done)
     })
 
     it('throws NotAcceptedError on UnmetConditionError', function (done) {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oAKAAA')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(422, {id: 'UnmetConditionError', message: 'fail'})
-      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'oAKAAA')
         .should.be.rejectedWith(errors.NotAcceptedError, 'fail')
         .notify(done)
     })
 
     it('throws TransferNotConditionalError', function (done) {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oAKAAA')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(422, {id: 'TransferNotConditionalError', message: 'fail'})
-      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'oAKAAA')
         .should.be.rejectedWith(errors.TransferNotConditionalError, 'fail')
         .notify(done)
     })
 
     it('throws TransferNotFoundError on NotFoundError', function (done) {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oAKAAA')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(404, {id: 'NotFoundError', message: 'fail'})
-      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'oAKAAA')
         .should.be.rejectedWith(errors.TransferNotFoundError, 'fail')
         .notify(done)
     })
 
     it('throws AlreadyRolledBackError when fulfilling a rejected transfer', function (done) {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:0')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oAKAAA')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(404, {
           id: 'InvalidModificationError',
           message: 'Transfers in state rejected may not be executed'
         })
-      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:0')
+      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'oAKAAA')
         .should.be.rejectedWith(errors.AlreadyRolledBackError, 'Transfers in state rejected may not be executed')
         .notify(done)
     })
 
     it('puts the fulfillment', function * () {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oAmAB2V4ZWN1dGU')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(201)
       yield assert.isFulfilled(this.plugin.fulfillCondition(
         '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-        'cf:0:ZXhlY3V0ZQ'), null)
+        'oAmAB2V4ZWN1dGU'), null)
     })
 
     it('sets the content type to text/plain', function * () {
@@ -337,11 +337,11 @@ describe('Transfer methods', function () {
           'content-type': 'text/plain'
         }
       })
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oAmAB2V4ZWN1dGU')
         .reply(201)
       yield assert.isFulfilled(this.plugin.fulfillCondition(
         '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-        'cf:0:ZXhlY3V0ZQ'), null)
+        'oAmAB2V4ZWN1dGU'), null)
     })
 
     it('should use the transfer_fulfillment url from the ledger metadata', function * () {
@@ -379,7 +379,7 @@ describe('Transfer methods', function () {
 
       yield assert.isFulfilled(plugin.fulfillCondition(
         '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
-        'cf:0:ZXhlY3V0ZQ'), null)
+        'oAmAB2V4ZWN1dGU'), null)
 
       nockInfo.done()
       fulfillmentNock.done()
@@ -387,10 +387,10 @@ describe('Transfer methods', function () {
 
     it('throws an ExternalError on 500', function () {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'cf:0:ZXhlY3V0ZQ')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oAmAB2V4ZWN1dGU')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(500)
-      return assert.isRejected(this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ'), errors.ExternalError, /Failed to submit fulfillment for transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c Error: undefined/)
+      return assert.isRejected(this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'oAmAB2V4ZWN1dGU'), errors.ExternalError, /Failed to submit fulfillment for transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c Error: undefined/)
     })
 
     it('throws an Error when not connected', function () {
@@ -399,7 +399,7 @@ describe('Transfer methods', function () {
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      return assert.isRejected(plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'cf:0:ZXhlY3V0ZQ'),
+      return assert.isRejected(plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'oAmAB2V4ZWN1dGU'),
         /Must be connected before fulfillCondition can be called/)
     })
   })
@@ -409,10 +409,10 @@ describe('Transfer methods', function () {
       nock('http://red.example')
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
         .basicAuth({user: 'mike', pass: 'mike'})
-        .reply(200, 'cf:0:ZXhlY3V0ZQ')
+        .reply(200, 'oAmAB2V4ZWN1dGU')
       yield assert.isFulfilled(
         this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
-        'cf:0:ZXhlY3V0ZQ')
+        'oAmAB2V4ZWN1dGU')
     })
 
     it('throws TransferNotFoundError', function * () {

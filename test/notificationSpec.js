@@ -247,10 +247,10 @@ describe('Notification handling', function () {
         params: {
           event: 'transfer.update',
           resource: Object.assign(this.fiveBellsTransferAlice, {
-            execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+            execution_condition: 'ni:///sha-256;vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI?fpt=preimage-sha-256&cost=7'
           }),
           related_resources: {
-            execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+            execution_condition_fulfillment: 'oAmAB2V4ZWN1dGU'
           }
         }
       }))
@@ -270,10 +270,10 @@ describe('Notification handling', function () {
         params: {
           event: 'transfer.update',
           resource: Object.assign(this.fiveBellsTransferMike, {
-            execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+            execution_condition: 'ni:///sha-256;vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI?fpt=preimage-sha-256&cost=7'
           }),
           related_resources: {
-            execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+            execution_condition_fulfillment: 'oAmAB2V4ZWN1dGU'
           }
         }
       }))
@@ -588,10 +588,10 @@ function * itEmitsFulfillExecutionCondition () {
     params: {
       event: 'transfer.update',
       resource: Object.assign(this.fiveBellsTransferExecuted, {
-        execution_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+        execution_condition: 'ni:///sha-256;vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI?fpt=preimage-sha-256&cost=7'
       }),
       related_resources: {
-        execution_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+        execution_condition_fulfillment: 'oAmAB2V4ZWN1dGU'
       }
     }
   }))
@@ -602,8 +602,8 @@ function * itEmitsFulfillExecutionCondition () {
   sinon.assert.calledOnce(this.stubFulfillExecutionCondition)
   sinon.assert.calledWith(this.stubFulfillExecutionCondition,
     Object.assign(this.transfer, {
-      executionCondition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
-    }), 'cf:0:ZXhlY3V0ZQ')
+      executionCondition: 'ni:///sha-256;vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI?fpt=preimage-sha-256&cost=7'
+    }), 'oAmAB2V4ZWN1dGU')
 }
 
 function * itEmitsFulfillCancellationCondition () {
@@ -615,10 +615,10 @@ function * itEmitsFulfillCancellationCondition () {
       event: 'transfer.update',
       resource: Object.assign(this.fiveBellsTransferExecuted, {
         state: 'rejected',
-        cancellation_condition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
+        cancellation_condition: 'ni:///sha-256;vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI?fpt=preimage-sha-256&cost=7'
       }),
       related_resources: {
-        cancellation_condition_fulfillment: 'cf:0:ZXhlY3V0ZQ'
+        cancellation_condition_fulfillment: 'oAmAB2V4ZWN1dGU'
       }
     }
   }))
@@ -630,6 +630,6 @@ function * itEmitsFulfillCancellationCondition () {
   sinon.assert.calledOnce(this.stubFulfillCancellationCondition)
   sinon.assert.calledWith(this.stubFulfillCancellationCondition,
     Object.assign(this.transfer, {
-      cancellationCondition: 'cc:0:3:vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI:7'
-    }), 'cf:0:ZXhlY3V0ZQ')
+      cancellationCondition: 'ni:///sha-256;vmvf6B7EpFalN6RGDx9F4f4z0wtOIgsIdCmbgv06ceI?fpt=preimage-sha-256&cost=7'
+    }), 'oAmAB2V4ZWN1dGU')
 }
