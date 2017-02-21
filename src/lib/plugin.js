@@ -12,8 +12,7 @@ const UnreachableError = require('../errors/unreachable-error')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
 const isNil = require('lodash/fp/isNil')
 const omitNil = require('lodash/fp/omitBy')(isNil)
-const startsWith = require('lodash/fp/startsWith')
-const translateBellsToPluginApi = require('./translate').translateBellsToPluginApi
+const translate = require('./translate')
 const LedgerContext = require('./ledger-context')
 
 const backoffMin = 1000
@@ -432,7 +431,7 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new errors.InvalidFieldsError('invalid data')
     }
 
-    const destinationAddress = this.parseAddress(message.account)
+    const destinationAddress = this.ledgerContext.parseAddress(message.account)
     const fiveBellsMessage = {
       ledger: this.ledgerContext.host,
       from: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(this.username)),
@@ -473,26 +472,11 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new errors.InvalidFieldsError('invalid amount')
     }
 
-    const sourceAddress = this.parseAddress(transfer.account)
-    const fiveBellsTransfer = omitNil({
-      id: this.ledgerContext.urls.transfer.replace(':id', transfer.id),
-      ledger: this.ledgerContext.host,
-      debits: [omitNil({
-        account: this.account,
-        amount: transfer.amount,
-        authorized: true,
-        memo: transfer.noteToSelf
-      })],
-      credits: [omitNil({
-        account: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(sourceAddress.username)),
-        amount: transfer.amount,
-        memo: transfer.data
-      })],
-      execution_condition: transfer.executionCondition,
-      cancellation_condition: transfer.cancellationCondition,
-      expires_at: transfer.expiresAt,
-      additional_info: transfer.cases ? { cases: transfer.cases } : undefined
-    })
+    const fiveBellsTransfer = translate.translatePluginApiToBells(
+      transfer,
+      this.account,
+      this.ledgerContext
+    )
 
     // If Atomic mode, add destination transfer to notification targets
     if (transfer.cases) {
@@ -545,7 +529,7 @@ class FiveBellsLedger extends EventEmitter2 {
       requestCredentials(this.credentials), {
         method: 'put',
         uri: this.ledgerContext.urls.transfer_fulfillment.replace(':id', transferId),
-        body: conditionFulfillment,
+        body: translate.translateToCryptoFulfillment(conditionFulfillment),
         headers: {
           'content-type': 'text/plain'
         }
@@ -568,7 +552,9 @@ class FiveBellsLedger extends EventEmitter2 {
     if (fulfillmentRes.statusCode === 200 || fulfillmentRes.statusCode === 201) {
       return null
     } else {
-      throw new ExternalError('Failed to submit fulfillment for transfer: ' + transferId + ' Error: ' + (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
+      throw new ExternalError('Failed to submit fulfillment for transfer: ' +
+        transferId + ' Error: ' +
+        (fulfillmentRes.body ? JSON.stringify(fulfillmentRes.body) : fulfillmentRes.error))
     }
   }
 
@@ -688,29 +674,12 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _handleNotification (notification) {
-    const eventParams = translateBellsToPluginApi(
+    const eventParams = translate.translateBellsToPluginApi(
       notification,
       this.account,
       this.ledgerContext
     )
     yield this.emitAsync.apply(this, eventParams)
-  }
-
-  parseAddress (address) {
-    const prefix = this.getInfo().prefix
-
-    if (!startsWith(prefix, address)) {
-      debug('destination address has invalid prefix', { prefix, address })
-      throw new errors.InvalidFieldsError('Destination address "' + address + '" must start ' +
-        'with ledger prefix "' + prefix + '"')
-    }
-
-    const addressParts = address.substr(prefix.length).split('.')
-    return {
-      ledger: prefix,
-      username: addressParts.slice(0, 1).join('.'),
-      additionalParts: addressParts.slice(1).join('.')
-    }
   }
 
   * _getAuthToken () {

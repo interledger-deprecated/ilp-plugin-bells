@@ -66,11 +66,11 @@ class NoSubscriptionsError extends Error {
 module.exports = {
   AlreadyFulfilledError,
   AlreadyRolledBackError,
-  InvalidFieldsError,
-  TransferNotFoundError,
-  TransferNotConditionalError,
   DuplicateIdError,
+  InvalidFieldsError,
   MissingFulfillmentError,
   NoSubscriptionsError,
-  NotAcceptedError
+  NotAcceptedError,
+  TransferNotConditionalError,
+  TransferNotFoundError
 }

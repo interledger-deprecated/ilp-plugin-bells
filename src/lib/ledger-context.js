@@ -2,7 +2,9 @@
 
 const debug = require('debug')('ilp-plugin-bells:ledger-context')
 const parseURL = require('url').parse
+const errors = require('../errors')
 const ExternalError = require('../errors/external-error')
+const startsWith = require('lodash/fp/startsWith')
 
 const REQUIRED_LEDGER_URLS = [ 'transfer', 'transfer_fulfillment', 'transfer_rejection', 'account', 'auth_token', 'websocket', 'message' ]
 
@@ -65,6 +67,22 @@ class LedgerContext {
     }
   }
 
+  parseAddress (address) {
+    const prefix = this.prefix
+
+    if (!startsWith(prefix, address)) {
+      debug('destination address has invalid prefix', { prefix, address })
+      throw new errors.InvalidFieldsError('Destination address "' + address + '" must start ' +
+        'with ledger prefix "' + prefix + '"')
+    }
+
+    const addressParts = address.substr(prefix.length).split('.')
+    return {
+      ledger: prefix,
+      username: addressParts.slice(0, 1).join('.'),
+      additionalParts: addressParts.slice(1).join('.')
+    }
+  }
 }
 
 module.exports = LedgerContext
