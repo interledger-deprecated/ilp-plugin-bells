@@ -263,6 +263,40 @@ describe('PluginBellsFactory', function () {
           done()
         })
       })
+
+      it('works for ledgers that contain a port in the URL', function * () {
+        nock.cleanAll()
+
+        this.wsRedLedger = wsHelper.makeServer('ws://red.example:3000/websocket?token=abc')
+        this.infoRedLedger = JSON.parse(JSON.stringify(this.infoRedLedger).replace(/red\.example/g, 'red.example:3000'))
+
+        nock('http://red.example:3000')
+          .get('/accounts/admin')
+          .reply(200, {
+            ledger: 'http://red.example:3000',
+            name: 'admin'
+          })
+          .get('/')
+          .reply(200, this.infoRedLedger)
+          .get('/auth_token')
+          .reply(200, {token: 'abc'})
+          .get('/accounts/bob')
+          .reply(200, {
+            ledger: 'http://red.example:3000',
+            name: 'bob'
+          })
+
+        this.factory = new PluginBellsFactory({
+          adminUsername: 'admin',
+          adminPassword: 'admin',
+          adminAccount: 'http://red.example:3000/accounts/admin',
+          prefix: 'example.red.'
+        })
+
+        yield this.factory.connect()
+        const plugin = yield this.factory.create({ account: 'http://red.example:3000/accounts/bob' })
+        assert.equal(plugin.username, 'bob')
+      })
     })
 
     describe('remove', function () {

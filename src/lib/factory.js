@@ -5,7 +5,6 @@ const Plugin = require('./plugin')
 const debug = require('debug')('ilp-plugin-bells:factory')
 const UnreachableError = require('../errors/unreachable-error')
 const request = require('co-request')
-const pathToRegexp = require('path-to-regexp')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
 const translateBellsToPluginApi = require('./translate').translateBellsToPluginApi
 
@@ -25,7 +24,6 @@ class PluginFactory extends EventEmitter2 {
     this.adminAccount = opts.adminAccount
     this.configPrefix = opts.prefix
     this.globalSubscription = !!opts.globalSubscription
-    this.accountRegex = null
     this.ledgerContext = null
     this.adminPlugin = null
     this.plugins = new Map()
@@ -58,12 +56,6 @@ class PluginFactory extends EventEmitter2 {
 
     // store the shared context
     this.ledgerContext = this.adminPlugin.ledgerContext
-
-    // generate account endpoints
-    this.accountRegex = pathToRegexp(this.ledgerContext.urls.account, [{
-      name: 'name',
-      prefix: '/'
-    }])
 
     if (this.globalSubscription) {
       debug('subscribing to all accounts')
@@ -104,7 +96,8 @@ class PluginFactory extends EventEmitter2 {
           })
       }
 
-      const plugin = this.plugins.get(this.accountRegex.exec(account)[1])
+      const username = this.ledgerContext.accountUriToName(account)
+      const plugin = this.plugins.get(username)
       if (!plugin) continue
       debug('sending notification to ' + account)
       co.wrap(plugin._handleNotification).call(plugin, notification)
@@ -137,7 +130,7 @@ class PluginFactory extends EventEmitter2 {
       throw new Error('account and username can\'t both be suppplied')
     }
 
-    const username = opts.account ? this.accountRegex.exec(opts.account)[1] : opts.username
+    const username = opts.username || this.ledgerContext.accountUriToName(opts.account)
 
     if (typeof username !== 'string' || !/^[a-z0-9]([a-z0-9]|[-](?!-)){0,18}[a-z0-9]$/.test(username)) {
       throw new Error('Invalid username')
@@ -148,7 +141,7 @@ class PluginFactory extends EventEmitter2 {
     if (existing) return existing
 
     // parse endpoint to get URL
-    const account = this.ledgerContext
+    const account = opts.account || this.ledgerContext
       .urls
       .account
       .replace('/:name', '/' + username)

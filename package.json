@@ -65,7 +65,6 @@
     "eventemitter2": "^2.2.2",
     "five-bells-shared": "^21.2.0",
     "lodash": "^4.13.1",
-    "path-to-regexp": "^1.6.0",
     "reconnect-core": "^1.2.0",
     "ws": "^1.1.0"
   }
