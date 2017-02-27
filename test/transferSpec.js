@@ -162,6 +162,14 @@ describe('Transfer methods', function () {
       ).notify(done)
     })
 
+    it('throws InvalidFieldsError for non-integer amount', function (done) {
+      this.plugin.sendTransfer({
+        id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+        account: 'example.red.alice',
+        amount: '1.1'
+      }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid amount').notify(done)
+    })
+
     it('rejects a transfer when the destination does not begin with the correct prefix', function * () {
       yield assert.isRejected(this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
