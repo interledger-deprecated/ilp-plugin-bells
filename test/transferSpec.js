@@ -427,8 +427,8 @@ describe('Transfer methods', function () {
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200, 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-      yield assert.isFulfilled(
-        this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
+      assert.equal(
+        yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
         'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok')
     })
 

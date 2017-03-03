@@ -302,5 +302,6 @@ const translatePluginApiToBells = (transfer, account, ledgerContext) => {
 Object.assign(module.exports, {
   translateBellsToPluginApi,
   translatePluginApiToBells,
-  translateToCryptoFulfillment
+  translateToCryptoFulfillment,
+  translateFromCryptoFulfillment
 })
