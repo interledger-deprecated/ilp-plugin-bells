@@ -586,7 +586,7 @@ class FiveBellsLedger extends EventEmitter2 {
       throw new ExternalError('Remote error: message=' + err.message)
     }
 
-    if (res.statusCode === 200) return res.body
+    if (res.statusCode === 200) return translate.translateFromCryptoFulfillment(res.body)
     debug('error getting fulfillment: ' + res.statusCode + ' ' + JSON.stringify(res.body))
     if (res.statusCode >= 400 && res.body) {
       if (res.body.id === 'MissingFulfillmentError') throw new errors.MissingFulfillmentError(res.body.message)

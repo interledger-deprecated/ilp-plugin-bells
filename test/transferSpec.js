@@ -149,6 +149,19 @@ describe('Transfer methods', function () {
       }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid amount').notify(done)
     })
 
+    it('throws InvalidFieldsError for invalid condition', function (done) {
+      this.plugin.sendTransfer({
+        id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+        account: 'example.red.alice',
+        amount: '1',
+        expiresAt: (new Date((new Date()) + 10000)).toISOString(),
+        executionCondition: 'garbage'
+      }).should.be.rejectedWith(
+        errors.InvalidFieldsError,
+        /Condition size must be 32 bytes as base64url/
+      ).notify(done)
+    })
+
     it('rejects a transfer when the destination does not begin with the correct prefix', function * () {
       yield assert.isRejected(this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -301,8 +314,13 @@ describe('Transfer methods', function () {
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(404, {id: 'NotFoundError', message: 'fail'})
-      this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok')
+      return this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok')
         .should.be.rejectedWith(errors.TransferNotFoundError, 'fail')
+    })
+
+    it('throws InvalidFieldsError on invalid fulfillment', function () {
+      return this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'garbage')
+        .should.be.rejectedWith(errors.InvalidFieldsError)
     })
 
     it('throws AlreadyRolledBackError when fulfilling a rejected transfer', function () {
@@ -409,8 +427,8 @@ describe('Transfer methods', function () {
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200, 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-      yield assert.isFulfilled(
-        this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
+      assert.equal(
+        yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
         'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok')
     })
 
