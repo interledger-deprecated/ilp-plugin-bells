@@ -1,6 +1,7 @@
 'use strict'
 
 const UnrelatedNotificationError = require('../errors/unrelated-notification-error')
+const InvalidFieldsError = require('../errors').InvalidFieldsError
 
 const base64url = require('base64url')
 const isNil = require('lodash/fp/isNil')
@@ -41,7 +42,7 @@ const translateFromCryptoCondition = (cryptoCondition) => {
   if (cryptoCondition.indexOf(PREIMAGE_CONDITION_PREFIX) !== 0 ||
       cryptoCondition.indexOf(PREIMAGE_CONDITION_SUFFIX) !==
         PREIMAGE_CONDITION_SUFFIX_START) {
-    throw new Error('Invalid crypto-condition, must be PREIMAGE-SHA-256 with 32-byte preimage, but received: ' + cryptoCondition)
+    throw new InvalidFieldsError('Invalid crypto-condition, must be PREIMAGE-SHA-256 with 32-byte preimage, but received: ' + cryptoCondition)
   }
 
   return cryptoCondition.slice(
@@ -67,7 +68,7 @@ const translateToCryptoCondition = (condition) => {
   }
 
   if (!REGEX_32_BYTES_AS_BASE64URL.test(condition)) {
-    throw new Error('Condition size must be 32 bytes as base64url, but was: ' + condition)
+    throw new InvalidFieldsError('Condition size must be 32 bytes as base64url, but was: ' + condition)
   }
 
   return PREIMAGE_CONDITION_PREFIX + condition + PREIMAGE_CONDITION_SUFFIX
@@ -77,7 +78,7 @@ const translateFromCryptoFulfillment = (cryptoFulfillment) => {
   const asBuffer = Buffer.from(cryptoFulfillment, 'base64')
 
   if (PREIMAGE_FULFILLMENT_PREAMBLE.compare(asBuffer, 0, PREIMAGE_FULFILLMENT_PREAMBLE.length) !== 0) {
-    throw new Error('Unexpected fulfillment preamble, not a PREIMAGE-SHA-256 fulfillment?')
+    throw new InvalidFieldsError('Unexpected fulfillment preamble, not a PREIMAGE-SHA-256 fulfillment?')
   }
 
   return base64url(asBuffer.slice(PREIMAGE_FULFILLMENT_PREAMBLE.length))
@@ -89,7 +90,7 @@ const translateToCryptoFulfillment = (preimage) => {
   }
 
   if (!REGEX_32_BYTES_AS_BASE64URL.test(preimage)) {
-    throw new Error('Condition preimage must be 32 bytes as base64url, but was: ' + preimage)
+    throw new InvalidFieldsError('Condition preimage must be 32 bytes as base64url, but was: ' + preimage)
   }
 
   const fulfillment = Buffer.concat([PREIMAGE_FULFILLMENT_PREAMBLE, Buffer.from(preimage, 'base64')])
