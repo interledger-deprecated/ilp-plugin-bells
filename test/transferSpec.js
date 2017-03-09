@@ -47,7 +47,7 @@ describe('Transfer methods', function () {
     this.transfer = {
       id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
       account: 'example.red.alice',
-      amount: '123',
+      amount: '12300',
       noteToSelf: {source: 'something'},
       data: {foo: 'bar'}
     }
@@ -206,7 +206,7 @@ describe('Transfer methods', function () {
       }).should.be.rejectedWith(errors.DuplicateIdError, 'fail')
     })
 
-    it('throws an NotAcceptedError on 400', function () {
+    it('throws a NotAcceptedError on 400', function (done) {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', {
           id: 'http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -227,8 +227,8 @@ describe('Transfer methods', function () {
       return this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
-        amount: '123'
-      }).should.be.rejectedWith(errors.NotAcceptedError, 'fail')
+        amount: '12300'
+      }).should.be.rejectedWith(errors.NotAcceptedError, 'fail').notify(done)
     })
 
     it('sets up case notifications when "cases" is provided', function * () {
@@ -256,7 +256,7 @@ describe('Transfer methods', function () {
       yield this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
-        amount: '123',
+        amount: '12300',
         cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
       })
     })

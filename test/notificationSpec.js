@@ -100,7 +100,7 @@ describe('Notification handling', function () {
       account: 'example.red.alice',
       from: 'example.red.alice',
       to: 'example.red.mike',
-      amount: '10',
+      amount: '1000',
       expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
     }
 
@@ -319,7 +319,7 @@ describe('Notification handling', function () {
         from: 'example.red.alice',
         to: 'example.red.mike',
         ledger: 'example.red.',
-        amount: '10'
+        amount: '1000'
       }
     })
 
@@ -458,7 +458,7 @@ describe('Notification handling', function () {
         from: 'example.red.mike',
         to: 'example.red.alice',
         ledger: 'example.red.',
-        amount: '10'
+        amount: '1000'
       }
     })
 

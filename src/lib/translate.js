@@ -4,6 +4,7 @@ const UnrelatedNotificationError = require('../errors/unrelated-notification-err
 const InvalidFieldsError = require('../errors').InvalidFieldsError
 
 const base64url = require('base64url')
+const BigNumber = require('bignumber.js')
 const isNil = require('lodash/fp/isNil')
 const omitNil = require('lodash/fp/omitBy')(isNil)
 const find = require('lodash/find')
@@ -144,6 +145,7 @@ const translateTransferNotification = (
       // TODO: What if there are multiple debits?
       const debit = fiveBellsTransfer.debits[0]
 
+      const integerAmount = (new BigNumber(credit.amount)).shift(ledgerContext.getInfo().scale)
       const transfer = omitNil({
         id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
         direction: 'incoming',
@@ -151,7 +153,7 @@ const translateTransferNotification = (
         from: ledgerContext.prefix + ledgerContext.accountUriToName(debit.account),
         to: ledgerContext.prefix + ledgerContext.accountUriToName(credit.account),
         ledger: ledgerContext.prefix,
-        amount: credit.amount,
+        amount: integerAmount.toString(),
         data: credit.memo,
         ilp: credit.memo && credit.memo.ilp,
         executionCondition: translateFromCryptoCondition(
@@ -210,6 +212,7 @@ const translateTransferNotification = (
       //       credits/debits?
       const credit = fiveBellsTransfer.credits[0]
 
+      const integerAmount = (new BigNumber(debit.amount)).shift(ledgerContext.getInfo().scale)
       const transfer = omitNil({
         id: fiveBellsTransfer.id.substring(fiveBellsTransfer.id.length - 36),
         direction: 'outgoing',
@@ -217,7 +220,7 @@ const translateTransferNotification = (
         from: ledgerContext.prefix + ledgerContext.accountUriToName(debit.account),
         to: ledgerContext.prefix + ledgerContext.accountUriToName(credit.account),
         ledger: ledgerContext.prefix,
-        amount: debit.amount,
+        amount: integerAmount.toString(),
         data: credit.memo,
         ilp: credit.memo && credit.memo.ilp,
         noteToSelf: debit.memo,
@@ -288,18 +291,21 @@ const translateMessageNotification = (message, account, ledgerContext) => {
 
 const translatePluginApiToBells = (transfer, account, ledgerContext) => {
   const sourceAddress = ledgerContext.parseAddress(transfer.account)
+  const fiveBellsAmount = (new BigNumber(transfer.amount))
+    .shift(-ledgerContext.getInfo().scale)
+    .toString()
   return omitNil({
     id: ledgerContext.urls.transfer.replace(':id', transfer.id),
     ledger: ledgerContext.host,
     debits: [omitNil({
       account: account,
-      amount: transfer.amount,
+      amount: fiveBellsAmount,
       authorized: true,
       memo: transfer.noteToSelf
     })],
     credits: [omitNil({
       account: ledgerContext.urls.account.replace(':name', encodeURIComponent(sourceAddress.username)),
-      amount: transfer.amount,
+      amount: fiveBellsAmount,
       memo: (transfer.data || transfer.ilp)
         ? Object.assign({}, transfer.data, { ilp: transfer.ilp })
         : null
