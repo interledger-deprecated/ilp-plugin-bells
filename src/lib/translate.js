@@ -154,7 +154,6 @@ const translateTransferNotification = (
         to: ledgerContext.prefix + ledgerContext.accountUriToName(credit.account),
         ledger: ledgerContext.prefix,
         amount: integerAmount.toString(),
-        data: credit.memo,
         ilp: credit.memo && credit.memo.ilp,
         executionCondition: translateFromCryptoCondition(
           fiveBellsTransfer.execution_condition
@@ -221,7 +220,6 @@ const translateTransferNotification = (
         to: ledgerContext.prefix + ledgerContext.accountUriToName(credit.account),
         ledger: ledgerContext.prefix,
         amount: integerAmount.toString(),
-        data: credit.memo,
         ilp: credit.memo && credit.memo.ilp,
         noteToSelf: debit.memo,
         executionCondition: translateFromCryptoCondition(
@@ -306,9 +304,7 @@ const translatePluginApiToBells = (transfer, account, ledgerContext) => {
     credits: [omitNil({
       account: ledgerContext.urls.account.replace(':name', encodeURIComponent(sourceAddress.username)),
       amount: fiveBellsAmount,
-      memo: (transfer.data || transfer.ilp)
-        ? Object.assign({}, transfer.data, { ilp: transfer.ilp })
-        : null
+      memo: transfer.ilp && {ilp: transfer.ilp}
     })],
     execution_condition: translateToCryptoCondition(
       transfer.executionCondition

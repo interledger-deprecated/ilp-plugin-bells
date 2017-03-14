@@ -48,8 +48,7 @@ describe('Transfer methods', function () {
       id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
       account: 'example.red.alice',
       amount: '12300',
-      noteToSelf: {source: 'something'},
-      data: {foo: 'bar'}
+      noteToSelf: {source: 'something'}
     }
 
     this.nockInfo = nock('http://red.example')
@@ -176,7 +175,7 @@ describe('Transfer methods', function () {
         account: 'red.alice',
         amount: '123',
         noteToSelf: {source: 'something'},
-        data: {foo: 'bar'}
+        memo: {foo: 'bar'}
       }), errors.InvalidFieldsError, /^Destination address "red.alice" must start with ledger prefix "example.red."$/)
     })
 
@@ -224,7 +223,7 @@ describe('Transfer methods', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(400, {id: 'SomeError', message: 'fail'})
 
-      return this.plugin.sendTransfer({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
         amount: '12300'
