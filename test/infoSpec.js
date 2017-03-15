@@ -63,8 +63,8 @@ describe('Info methods', function () {
         connectors: ['example.red.mark'],
         currencyCode: 'USD',
         currencySymbol: '$',
-        precision: 2,
-        scale: 4
+        precision: 10,
+        scale: 2
       }
       assert.deepEqual(this.plugin.getInfo(), info)
     })
@@ -205,8 +205,8 @@ describe('Info methods', function () {
       nock('http://red.example')
         .get('/accounts/mike')
         .basicAuth({user: 'mike', pass: 'mike'})
-        .reply(200, {balance: '100'})
-      yield assert.isFulfilled(this.plugin.getBalance(), '100')
+        .reply(200, {balance: '100.01'})
+      yield assert.isFulfilled(this.plugin.getBalance(), '10001')
     })
 
     it('throws an ExternalError on 500', function () {

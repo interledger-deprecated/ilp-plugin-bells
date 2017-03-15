@@ -5,6 +5,7 @@ const co = require('co')
 const request = require('co-request')
 const WebSocket = require('ws')
 const reconnectCore = require('reconnect-core')
+const BigNumber = require('bignumber.js')
 const debug = require('debug')('ilp-plugin-bells:plugin')
 const errors = require('../errors')
 const ExternalError = require('../errors/external-error')
@@ -401,7 +402,9 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!res || res.statusCode !== 200) {
       throw new ExternalError('Unable to determine current balance')
     }
-    return res.body.balance
+    const ledgerBalance = new BigNumber(res.body.balance)
+    const integerBalance = ledgerBalance.shift(this.ledgerContext.getInfo().scale)
+    return integerBalance.toString()
   }
 
   /**
@@ -468,7 +471,9 @@ class FiveBellsLedger extends EventEmitter2 {
     if (typeof transfer.account !== 'string') {
       throw new errors.InvalidFieldsError('invalid account')
     }
-    if (typeof transfer.amount !== 'string' || +transfer.amount <= 0) {
+    if (typeof transfer.amount !== 'string' ||
+     +transfer.amount <= 0 ||
+     transfer.amount.indexOf('.') !== -1) { // integers only
       throw new errors.InvalidFieldsError('invalid amount')
     }
 
@@ -600,7 +605,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
   /**
    * @param {String} transferId
-   * @param {String} rejectionMessage
+   * @param {RejectionMessage} rejectionMessage
    * @returns {Promise<null>}
    */
   rejectIncomingTransfer (transferId, rejectionMessage) {
@@ -616,11 +621,9 @@ class FiveBellsLedger extends EventEmitter2 {
         method: 'put',
         uri: this.ledgerContext.urls.transfer_rejection.replace(':id', transferId),
         body: rejectionMessage,
-        headers: {
-          'Content-Type': 'text/plain'
-        }
+        json: true
       }))
-    const body = getResponseJSON(rejectionRes)
+    const body = rejectionRes.body
 
     if (rejectionRes.statusCode >= 400) {
       if (body && body.id === 'UnauthorizedError') throw new errors.NotAcceptedError(body.message)

@@ -1,6 +1,6 @@
 {
-  "scale": 4,
-  "precision": 2,
+  "scale": 2,
+  "precision": 10,
   "connectors": [
     {
       "id": "http://red.example/accounts/mark",

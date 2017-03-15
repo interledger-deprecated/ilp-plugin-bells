@@ -47,9 +47,8 @@ describe('Transfer methods', function () {
     this.transfer = {
       id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
       account: 'example.red.alice',
-      amount: '123',
-      noteToSelf: {source: 'something'},
-      data: {foo: 'bar'}
+      amount: '12300',
+      noteToSelf: {source: 'something'}
     }
 
     this.nockInfo = nock('http://red.example')
@@ -162,13 +161,21 @@ describe('Transfer methods', function () {
       ).notify(done)
     })
 
+    it('throws InvalidFieldsError for non-integer amount', function (done) {
+      this.plugin.sendTransfer({
+        id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+        account: 'example.red.alice',
+        amount: '1.1'
+      }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid amount').notify(done)
+    })
+
     it('rejects a transfer when the destination does not begin with the correct prefix', function * () {
       yield assert.isRejected(this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'red.alice',
         amount: '123',
         noteToSelf: {source: 'something'},
-        data: {foo: 'bar'}
+        memo: {foo: 'bar'}
       }), errors.InvalidFieldsError, /^Destination address "red.alice" must start with ledger prefix "example.red."$/)
     })
 
@@ -198,7 +205,7 @@ describe('Transfer methods', function () {
       }).should.be.rejectedWith(errors.DuplicateIdError, 'fail')
     })
 
-    it('throws an NotAcceptedError on 400', function () {
+    it('throws a NotAcceptedError on 400', function (done) {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', {
           id: 'http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -216,11 +223,11 @@ describe('Transfer methods', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(400, {id: 'SomeError', message: 'fail'})
 
-      return this.plugin.sendTransfer({
+      this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
-        amount: '123'
-      }).should.be.rejectedWith(errors.NotAcceptedError, 'fail')
+        amount: '12300'
+      }).should.be.rejectedWith(errors.NotAcceptedError, 'fail').notify(done)
     })
 
     it('sets up case notifications when "cases" is provided', function * () {
@@ -248,7 +255,7 @@ describe('Transfer methods', function () {
       yield this.plugin.sendTransfer({
         id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
         account: 'example.red.alice',
-        amount: '123',
+        amount: '12300',
         cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']
       })
     })
@@ -492,46 +499,53 @@ describe('Transfer methods', function () {
   })
 
   describe('rejectIncomingTransfer', function () {
+    const rejectionMessage = {
+      code: 'T00',
+      name: 'Internal Error',
+      message: 'fail!',
+      triggered_by: 'example.red.',
+      additional_info: {}
+    }
+
     it('returns null on success', function * () {
       nock('http://red.example', {
         reqheaders: {
-          'Content-Type': 'text/plain'
+          'Content-Type': 'application/json'
         }
-      })
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+      }).put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
         .reply(200, {whatever: true})
       yield assert.isFulfilled(
-        this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'),
+        this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage),
         null,
         'should resolve to null')
     })
 
     it('throws NotAcceptedError on UnauthorizedError', function * () {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
         .reply(422, {id: 'UnauthorizedError', message: 'error'})
-      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), errors.NotAcceptedError, /error/)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), errors.NotAcceptedError, /error/)
     })
 
     it('throws TransferNotFoundError on NotFoundError', function * () {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
         .reply(404, {id: 'NotFoundError', message: 'error'})
-      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), errors.TransferNotFoundError, /error/)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), errors.TransferNotFoundError, /error/)
     })
 
     it('throws AlreadyFulfilledError on InvalidModificationError', function * () {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
         .reply(404, {id: 'InvalidModificationError', message: 'error'})
-      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), errors.AlreadyFulfilledError, /error/)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), errors.AlreadyFulfilledError, /error/)
     })
 
     it('throws ExternalError on 500', function * () {
       nock('http://red.example')
-        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', 'fail!')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
         .reply(500)
-      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), ExternalError, /Remote error: status=500/)
+      return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), ExternalError, /Remote error: status=500/)
     })
 
     it('throws an Error when not connected', function () {
@@ -540,7 +554,7 @@ describe('Transfer methods', function () {
         account: 'http://red.example/accounts/mike',
         password: 'mike'
       })
-      return assert.isRejected(plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'fail!'), /Must be connected before rejectIncomingTransfer can be called/)
+      return assert.isRejected(plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), /Must be connected before rejectIncomingTransfer can be called/)
     })
   })
 })

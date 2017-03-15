@@ -42,7 +42,7 @@ describe('PluginBellsFactory', function () {
         id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
         direction: 'incoming',
         account: 'example.red.alice',
-        amount: '10',
+        amount: '1000',
         expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
       }
 
@@ -354,7 +354,7 @@ describe('PluginBellsFactory', function () {
         id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
         direction: 'incoming',
         account: 'example.red.alice',
-        amount: '10',
+        amount: '1000',
         expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
       }
 

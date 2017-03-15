@@ -11,10 +11,7 @@
   }],
   "credits": [{
     "account": "http://red.example/accounts/alice",
-    "amount": "123",
-    "memo": {
-      "foo": "bar"
-    }
+    "amount": "123"
   }]
 }
 

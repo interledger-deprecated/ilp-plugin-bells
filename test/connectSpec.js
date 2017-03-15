@@ -327,8 +327,8 @@ describe('Connection methods', function () {
           connectors: ['example.red.mark'],
           currencyCode: 'USD',
           currencySymbol: '$',
-          precision: 2,
-          scale: 4
+          precision: 10,
+          scale: 2
         })
       })
 
