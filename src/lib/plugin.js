@@ -15,6 +15,7 @@ const isNil = require('lodash/fp/isNil')
 const omitNil = require('lodash/fp/omitBy')(isNil)
 const translate = require('./translate')
 const LedgerContext = require('./ledger-context')
+const util = require('util')
 
 const backoffMin = 1000
 const backoffMax = 30000
@@ -427,14 +428,20 @@ class FiveBellsLedger extends EventEmitter2 {
     if (message.ledger !== this.ledgerContext.prefix) {
       throw new errors.InvalidFieldsError('invalid ledger')
     }
-    if (typeof message.account !== 'string') {
+    if (typeof message.to !== 'string' && typeof message.account !== 'string') {
       throw new errors.InvalidFieldsError('invalid account')
+    }
+    if (message.to && message.account) {
+      throw new errors.InvalidFieldsError('"to" and "account" cannot both be defined')
     }
     if (typeof message.data !== 'object') {
       throw new errors.InvalidFieldsError('invalid data')
     }
+    if (message.account) {
+      util.deprecate(() => {}, 'switch from using "account" to "to"')()
+    }
 
-    const destinationAddress = this.ledgerContext.parseAddress(message.account)
+    const destinationAddress = this.ledgerContext.parseAddress(message.to || message.account)
     const fiveBellsMessage = {
       ledger: this.ledgerContext.host,
       from: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(this.username)),
@@ -468,8 +475,14 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.ready) {
       throw new Error('Must be connected before sendTransfer can be called')
     }
-    if (typeof transfer.account !== 'string') {
+    if (typeof transfer.to !== 'string' && typeof transfer.account !== 'string') {
       throw new errors.InvalidFieldsError('invalid account')
+    }
+    if (transfer.to && transfer.account) {
+      throw new errors.InvalidFieldsError('"to" and "account" cannot both be defined')
+    }
+    if (transfer.account) {
+      util.deprecate(() => {}, 'switch from using "account" to "to"')()
     }
     if (typeof transfer.amount !== 'string' ||
      +transfer.amount <= 0 ||

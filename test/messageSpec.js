@@ -6,6 +6,7 @@ chai.use(chaiAsPromised)
 chai.should()
 
 const assert = chai.assert
+const expect = chai.expect
 
 const mock = require('mock-require')
 const nock = require('nock')
@@ -71,6 +72,24 @@ describe('Messaging', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200)
       yield assert.isFulfilled(this.plugin.sendMessage(this.message), null)
+    })
+
+    it('submits a message with "to" instead of "account"', function * () {
+      nock('http://red.example')
+        .post('/messages', this.ledgerMessage)
+        .basicAuth({user: 'mike', pass: 'mike'})
+        .reply(200)
+
+      this.message.to = this.message.account
+      delete this.message.account
+
+      yield assert.isFulfilled(this.plugin.sendMessage(this.message), null)
+    })
+
+    it('won\'t submit a message with both "to" and "account"', function * () {
+      this.message.to = this.message.account
+      yield expect(assert.isFulfilled(this.plugin.sendMessage(this.message), null))
+        .to.be.rejectedWith(/"to" and "account" cannot both be defined/)
     })
 
     it('should use the message url from the ledger metadata', function * () {
