@@ -6,6 +6,7 @@ chai.use(chaiAsPromised)
 chai.should()
 
 const assert = chai.assert
+const expect = chai.expect
 
 const mock = require('mock-require')
 const nock = require('nock')
@@ -72,6 +73,24 @@ describe('Transfer methods', function () {
         .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200)
       yield assert.isFulfilled(this.plugin.sendTransfer(this.transfer), null)
+    })
+
+    it('submits a transfer with "to" instead of "account"', function * () {
+      nock('http://red.example')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', this.ledgerTransfer)
+        .basicAuth({user: 'mike', pass: 'mike'})
+        .reply(200)
+
+      this.transfer.to = this.transfer.account
+      delete this.transfer.account
+
+      yield assert.isFulfilled(this.plugin.sendTransfer(this.transfer), null)
+    })
+
+    it('won\'t submit a transfer with both "to" and "account"', function * () {
+      this.transfer.to = this.transfer.account
+      yield expect(assert.isFulfilled(this.plugin.sendTransfer(this.transfer), null))
+        .to.be.rejectedWith(/"to" and "account" cannot both be defined/)
     })
 
     it('should use the transfer url from the ledger metadata', function * () {

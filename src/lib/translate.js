@@ -288,7 +288,7 @@ const translateMessageNotification = (message, account, ledgerContext) => {
 }
 
 const translatePluginApiToBells = (transfer, account, ledgerContext) => {
-  const sourceAddress = ledgerContext.parseAddress(transfer.account)
+  const sourceAddress = ledgerContext.parseAddress(transfer.to || transfer.account)
   const fiveBellsAmount = (new BigNumber(transfer.amount))
     .shift(-ledgerContext.getInfo().scale)
     .toString()
