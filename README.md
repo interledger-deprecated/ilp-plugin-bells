@@ -75,3 +75,9 @@ factory.connect().then(() => {
 
   factory.remove('alice')
 })
+```
+
+## Compatibility
+
+`ilp-plugin-bells` version 12 uses `five-bells-shared` version 23, and is only compatible with `five-bells-ledger` version 20.
+As of version 12.0.1, it exposes [version `2c9a2231` of the Ledger Plugin Interface](https://github.com/interledger/rfcs/blob/2c9a22312dfd750f72b73406017fea246c8cd292/0004-ledger-plugin-interface/0004-ledger-plugin-interface.md)
