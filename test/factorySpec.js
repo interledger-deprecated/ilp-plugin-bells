@@ -39,12 +39,17 @@ describe('PluginBellsFactory', function () {
         .reply(200, {token: 'abc'})
 
       this.transfer = {
-        id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
-        direction: 'incoming',
-        account: 'example.red.alice',
-        amount: '1000',
-        expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
+        current: {
+          id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
+          direction: 'incoming',
+          to: 'example.red.alice',
+          amount: '1000',
+          expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
+        }
       }
+      this.transfer.legacy = Object.assign({}, this.transfer.current)
+      delete this.transfer.legacy.to
+      this.transfer.legacy.account = this.transfer.current.to
 
       this.fiveBellsTransferAlice = {
         id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
@@ -58,7 +63,7 @@ describe('PluginBellsFactory', function () {
           account: 'http://red.example/accounts/alice',
           amount: '10'
         }],
-        expires_at: this.transfer.expiresAt
+        expires_at: this.transfer.current.expiresAt
       }
 
       this.fiveBellsTransferMike = {
@@ -167,32 +172,42 @@ describe('PluginBellsFactory', function () {
 
         yield handled
       })
+      const formats = ['legacy', 'current']
+      formats.map(format => {
+        it(`send a ${format}-format message as the correct username`, function * () {
+          nock('http://red.example')
+            .post('/messages', {
+              from: 'http://red.example/accounts/mike',
+              to: 'http://red.example/accounts/alice',
+              ledger: 'http://red.example',
+              data: { foo: 'bar' }
+            })
+            .basicAuth({user: 'admin', pass: 'admin'})
+            .reply(200)
 
-      it('send a message as the correct username', function * () {
-        nock('http://red.example')
-          .post('/messages', {
-            from: 'http://red.example/accounts/mike',
-            to: 'http://red.example/accounts/alice',
-            ledger: 'http://red.example',
-            data: { foo: 'bar' }
-          })
-          .basicAuth({user: 'admin', pass: 'admin'})
-          .reply(200)
-
-        yield this.plugin.sendMessage({
-          ledger: 'example.red.',
-          account: 'example.red.alice',
-          data: { foo: 'bar' }
+          const msg = {
+            legacy: {
+              ledger: 'example.red.',
+              account: 'example.red.alice',
+              data: { foo: 'bar' }
+            },
+            current: {
+              ledger: 'example.red.',
+              to: 'example.red.alice',
+              data: { foo: 'bar' }
+            }
+          }
+          yield this.plugin.sendMessage(msg[format])
         })
-      })
 
-      it('sends a transfer with the correct fields', function * () {
-        nock('http://red.example')
-          .put('/transfers/' + this.transfer.id, this.fiveBellsTransferAlice)
-          .basicAuth({user: 'admin', pass: 'admin'})
-          .reply(200)
+        it(`sends a ${format}-format transfer with the correct fields`, function * () {
+          nock('http://red.example')
+            .put('/transfers/' + this.transfer.current.id, this.fiveBellsTransferAlice)
+            .basicAuth({user: 'admin', pass: 'admin'})
+            .reply(200)
 
-        yield this.plugin.sendTransfer(this.transfer)
+          yield this.plugin.sendTransfer(this.transfer[format])
+        })
       })
     })
 
@@ -351,12 +366,17 @@ describe('PluginBellsFactory', function () {
         .reply(200, {token: 'abc'})
 
       this.transfer = {
-        id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
-        direction: 'incoming',
-        account: 'example.red.alice',
-        amount: '1000',
-        expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
+        current: {
+          id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
+          direction: 'incoming',
+          to: 'example.red.alice',
+          amount: '1000',
+          expiresAt: (new Date((new Date()).getTime() + 1000)).toISOString()
+        }
       }
+      this.transfer.legacy = Object.assign({}, this.transfer.current)
+      delete this.transfer.legacy.to
+      this.transfer.legacy.account = this.transfer.current.to
 
       this.fiveBellsTransferAlice = {
         id: 'http://red.example/transfers/ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
@@ -370,7 +390,7 @@ describe('PluginBellsFactory', function () {
           account: 'http://red.example/accounts/alice',
           amount: '10'
         }],
-        expires_at: this.transfer.expiresAt
+        expires_at: this.transfer.current.expiresAt
       }
 
       this.fiveBellsTransferMike = {
