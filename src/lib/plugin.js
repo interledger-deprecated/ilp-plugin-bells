@@ -144,6 +144,7 @@ class FiveBellsLedger extends EventEmitter2 {
     this.ws = null
     this.on('_rpc:notification', (notif) =>
       co.wrap(this._handleNotification).call(this, notif))
+    setTimeout(this.wsSend.bind(this)('ping'), 10000)
   }
 
   connect (options) {
@@ -279,14 +280,14 @@ class FiveBellsLedger extends EventEmitter2 {
               .call(this, rpcMessage)
               .then(() => {
                 if (this.debugReplyNotifications) {
-                  ws.send(JSON.stringify({ result: 'processed' }))
+                  this.wsSend(JSON.stringify({ result: 'processed' }))
                 }
               })
               .catch((err) => {
                 debug('failure while processing notification: ' +
                   (err && err.stack) ? err.stack : err)
                 if (this.debugReplyNotifications) {
-                  ws.send(JSON.stringify({
+                  this.wsSend(JSON.stringify({
                     result: 'ignored',
                     ignoreReason: {
                       id: err.name,
@@ -342,7 +343,22 @@ class FiveBellsLedger extends EventEmitter2 {
     this.connection = null
     return disconnected
   }
-
+  reconnect() {
+    return this.disconnect()
+      .then(() => this.connect())
+  }
+  wsSend(str) {
+    return new Promise((resolve, reject) => {
+      this.ws.send(str, (err) => (err ? reject(err) : resolve()))
+    }).then(() => { 
+      console.log('sent with success', str);
+    }, err => {
+      console.log('wsSend error', err)
+      this.reconnect().then(() => {
+        return this.wsSend(str)
+      })
+    })
+  }
   isConnected () {
     return this.connected
   }
@@ -665,7 +681,7 @@ class FiveBellsLedger extends EventEmitter2 {
       this.on('_rpc:response', listener)
       const rpcMessage = JSON.stringify({ jsonrpc: '2.0', id: requestId, method, params })
       debug('sending RPC message', rpcMessage)
-      this.ws.send(rpcMessage)
+      this.wsSend(rpcMessage)
     })
   }
 
