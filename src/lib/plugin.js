@@ -170,8 +170,14 @@ class FiveBellsLedger extends EventEmitter2 {
       return Promise.resolve(null)
     }
     if (this.connecting) {
+      const expiresAt = Date.now() + options.timeout
       return new Promise((resolve, reject) => {
-        this.once('_connect:done', (err) => err ? reject(err) : resolve())
+        this.once('_connect:done', (err) => {
+          if (!err) return resolve()
+          // The second connect() call has already expired.
+          if (expiresAt < Date.now()) return reject(err)
+          this.connect({timeout: expiresAt - Date.now()}).then(resolve).catch(reject)
+        })
       })
     }
     this.connecting = true
