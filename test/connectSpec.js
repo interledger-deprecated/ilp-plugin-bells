@@ -7,6 +7,7 @@ chai.should()
 
 const assert = chai.assert
 
+const sinon = require('sinon')
 const mock = require('mock-require')
 const nock = require('nock')
 const wsHelper = require('./helpers/ws')
@@ -17,6 +18,7 @@ const mockSocket = require('mock-socket')
 
 mock('ws', wsHelper.WebSocket)
 const PluginBells = require('..')
+const START_DATE = 1434412800000 // June 16, 2015 00:00:00 GMT
 
 describe('Connection methods', function () {
   beforeEach(function * () {
@@ -187,6 +189,24 @@ describe('Connection methods', function () {
         nockInfo.done()
         done()
       }).catch(done)
+    })
+
+    it('handles overlapping connect() calls', function * () {
+      const clock = sinon.useFakeTimers(START_DATE)
+      const accountNock = nock('http://red.example')
+        .get('/accounts/mike')
+        .times(2)
+        .replyWithError('fail')
+      const connect1 = this.plugin.connect({timeout: 1000})
+      const connect2 = this.plugin.connect({timeout: 6000})
+      clock.tick(1001)
+      yield connect1.should.be.rejectedWith(Error, /Unable to connect to account: timeout/)
+      // Account has been fetched only once.
+      assert(!accountNock.isDone())
+      clock.tick(5001)
+      yield connect2.should.be.rejectedWith(Error, /Unable to connect to account: timeout/)
+      assert(accountNock.isDone())
+      clock.restore()
     })
 
     it('fails if the response is invalid', function () {
