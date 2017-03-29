@@ -416,7 +416,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
   /**
    * @param {Object} message
-   * @param {IlpAddress} message.account
+   * @param {IlpAddress} message.to
    * @param {IlpAddress} message.ledger
    * @param {Object} message.data
    * @param {Object} message.custom (optional)
@@ -426,7 +426,9 @@ class FiveBellsLedger extends EventEmitter2 {
     return co.wrap(this._sendMessage).call(this, message)
   }
 
-  * _sendMessage (message) {
+  * _sendMessage (paramMessage) {
+    // clone the incoming object in case we want to correct its fields
+    const message = Object.assign({}, paramMessage)
     debug('sending message: ' + JSON.stringify(message))
     if (!this.ready) {
       throw new Error('Must be connected before sendMessage can be called')
@@ -434,20 +436,21 @@ class FiveBellsLedger extends EventEmitter2 {
     if (message.ledger !== this.ledgerContext.prefix) {
       throw new errors.InvalidFieldsError('invalid ledger')
     }
-    if (typeof message.to !== 'string' && typeof message.account !== 'string') {
-      throw new errors.InvalidFieldsError('invalid account')
-    }
-    if (message.to && message.account) {
-      throw new errors.InvalidFieldsError('"to" and "account" cannot both be defined')
+    if (typeof message.to !== 'string') {
+      // check for deprecated Message format, from before https://github.com/interledger/rfcs/commit/61958f54c268e5a52e1b85f090df02646b0dda38
+      if (typeof message.account === 'string') {
+        util.deprecate(() => {}, 'switch from using "account" to "to"')()
+        message.to = message.account
+        delete message.account
+      } else {
+        throw new errors.InvalidFieldsError('invalid to field')
+      }
     }
     if (typeof message.data !== 'object') {
       throw new errors.InvalidFieldsError('invalid data')
     }
-    if (message.account) {
-      util.deprecate(() => {}, 'switch from using "account" to "to"')()
-    }
 
-    const destinationAddress = this.ledgerContext.parseAddress(message.to || message.account)
+    const destinationAddress = this.ledgerContext.parseAddress(message.to)
     const fiveBellsMessage = {
       ledger: this.ledgerContext.host,
       from: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(this.username)),
@@ -477,18 +480,21 @@ class FiveBellsLedger extends EventEmitter2 {
     return co.wrap(this._sendTransfer).call(this, transfer)
   }
 
-  * _sendTransfer (transfer) {
+  * _sendTransfer (paramTransfer) {
+    // clone the incoming object in case we want to correct its fields
+    const transfer = Object.assign({}, paramTransfer)
     if (!this.ready) {
       throw new Error('Must be connected before sendTransfer can be called')
     }
-    if (typeof transfer.to !== 'string' && typeof transfer.account !== 'string') {
-      throw new errors.InvalidFieldsError('invalid account')
-    }
-    if (transfer.to && transfer.account) {
-      throw new errors.InvalidFieldsError('"to" and "account" cannot both be defined')
-    }
-    if (transfer.account) {
-      util.deprecate(() => {}, 'switch from using "account" to "to"')()
+    if (typeof transfer.to !== 'string') {
+      // check for deprecated Transfer format, from before https://github.com/interledger/rfcs/commit/61958f54c268e5a52e1b85f090df02646b0dda38
+      if (typeof transfer.account === 'string') {
+        util.deprecate(() => {}, 'switch from using "account" to "to"')()
+        transfer.to = transfer.account
+        delete transfer.account
+      } else {
+        throw new errors.InvalidFieldsError('invalid to field')
+      }
     }
     if (typeof transfer.amount !== 'string' ||
      +transfer.amount <= 0 ||

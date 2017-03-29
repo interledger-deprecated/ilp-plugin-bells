@@ -6,7 +6,6 @@ chai.use(chaiAsPromised)
 chai.should()
 
 const assert = chai.assert
-const expect = chai.expect
 
 const mock = require('mock-require')
 const nock = require('nock')
@@ -86,12 +85,6 @@ describe('Messaging', function () {
       yield assert.isFulfilled(this.plugin.sendMessage(this.message), null)
     })
 
-    it('won\'t submit a message with both "to" and "account"', function * () {
-      this.message.to = this.message.account
-      yield expect(assert.isFulfilled(this.plugin.sendMessage(this.message), null))
-        .to.be.rejectedWith(/"to" and "account" cannot both be defined/)
-    })
-
     it('should use the message url from the ledger metadata', function * () {
       nock.removeInterceptor(this.nockInfo)
       nock('http://red.example')
@@ -131,11 +124,11 @@ describe('Messaging', function () {
       messageNock.done()
     })
 
-    it('throws InvalidFieldsError for missing account', function (done) {
+    it('throws InvalidFieldsError for missing to field', function (done) {
       this.plugin.sendMessage({
         ledger: 'example.red.',
         data: {}
-      }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid account').notify(done)
+      }).should.be.rejectedWith(errors.InvalidFieldsError, 'invalid to field').notify(done)
     })
 
     it('throws InvalidFieldsError for missing ledger', function (done) {
