@@ -33,8 +33,9 @@ describe('Connection methods', function () {
   })
 
   afterEach(function * () {
+    this.plugin.disconnect()
     this.wsRedLedger.stop()
-    assert(nock.isDone(), 'nock should be called')
+    assert.isTrue(nock.isDone(), 'nock should be called')
   })
 
   describe('connect', function () {
@@ -91,8 +92,11 @@ describe('Connection methods', function () {
         .reply(200, {token: 'abc'})
 
       this.wsRedLedger.stop()
-      this.wsRedLedger = new mockSocket.Server('ws://red.example/websocket?token=abc')
+      // Unclear why but if this test overwrites this.wsRedLedger
+      // it causes other tests to fail
+      const wsRedLedger = new mockSocket.Server('ws://red.example/websocket?token=abc')
       yield this.plugin.connect({ timeout: 10 }).should.be.rejectedWith(Error, /timed out before "connect"/)
+      wsRedLedger.stop()
     })
 
     it('doesn\'t connect when the "account" is invalid', function (done) {
@@ -731,6 +735,67 @@ describe('Connection methods', function () {
           assert.equal(this.plugin.isConnected(), true)
           resolve()
         }, 150)
+      })
+    })
+
+    describe('websocket reconnection', function () {
+      beforeEach(function * () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+        nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+        nock('http://red.example')
+          .get('/auth_token')
+          .reply(200, {token: 'abc'})
+
+        yield this.plugin.connect()
+      })
+
+      afterEach(function () {
+        assert.equal(nock.isDone(), true, 'nocks must be used')
+      })
+
+      it('should reconnect if the websocket connection gets an error', function * () {
+        const spyConnection = sinon.spy()
+        this.wsRedLedger.on('connection', spyConnection)
+        this.wsRedLedger.emit('error', 'blah')
+        yield new Promise((resolve) => setTimeout(resolve, 10))
+        assert.equal(spyConnection.callCount, 1)
+      })
+
+      it('should reconnect if the websocket connection closes', function * () {
+        const spyConnection = sinon.spy()
+        this.wsRedLedger.on('connection', spyConnection)
+        this.wsRedLedger.emit('close')
+        yield new Promise((resolve) => setTimeout(resolve, 10))
+        assert.equal(spyConnection.callCount, 1)
+      })
+
+      it('should reconnect if the websocket connection keeps closing', function * () {
+        const realImmediate = setImmediate
+        const clock = sinon.useFakeTimers()
+        const spyConnection = sinon.spy()
+        const spyDisconnect = sinon.spy()
+        const spyConnect = sinon.spy()
+        this.wsRedLedger.on('connection', spyConnection)
+        this.plugin.on('disconnect', spyDisconnect)
+        this.plugin.on('connect', spyConnect)
+        for (let i = 1; i < 10; i++) {
+          this.wsRedLedger.emit('close')
+          // it actually uses a fibonacci backoff
+          // but it won't be more than 50ms in the first 10 times
+          clock.tick(50)
+          yield new Promise((resolve) => realImmediate(resolve))
+          assert.equal(spyConnection.callCount, i)
+          assert.equal(spyDisconnect.callCount, i)
+          assert.equal(spyConnect.callCount, i)
+        }
+        clock.restore()
       })
     })
   })

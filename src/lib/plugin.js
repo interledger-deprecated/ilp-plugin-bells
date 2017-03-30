@@ -20,6 +20,8 @@ const util = require('util')
 const backoffMin = 1000
 const backoffMax = 30000
 const defaultConnectTimeout = 60000
+const wsReconnectDelayMin = 1
+const wsReconnectDelayMax = 300
 
 function wait (ms) {
   if (ms === Infinity) {
@@ -261,7 +263,14 @@ class FiveBellsLedger extends EventEmitter2 {
       // open a websocket connection to the websockets notification URL,
       // and wait for a "connect" RPC message on it.
       new Promise((resolve, reject) => {
-        this.connection = reconnect({immediate: true}, (ws) => {
+        this.connection = reconnect({
+          // note: the immediate option controls the initial connection, not reconnection
+          immediate: true,
+          // reconnect ASAP and don't stop trying
+          failAfter: Infinity,
+          initialDelay: wsReconnectDelayMin,
+          maxDelay: wsReconnectDelayMax
+        }, (ws) => {
           ws.on('open', () => {
             debug('ws connected to ' + notificationsUrl)
           })
@@ -321,10 +330,20 @@ class FiveBellsLedger extends EventEmitter2 {
           .on('connect', (ws) => {
             this.ws = ws
           })
-          .on('disconnect', () => {
+          .on('disconnect', (err) => {
+            // Note this will be called any time the ws disconnects,
+            // including when reconnect-core will reconnect
+            debug('ws disconnected from ' + notificationsUrl)
+            if (err) {
+              debug('ws disconnected because of error:', (err && err.data || err))
+            }
             this.connected = false
+            this.ws.removeAllListeners()
             this.emit('disconnect')
             this.ws = null
+          })
+          .on('reconnect', (n, delay) => {
+            debug('ws will reconnect to ' + notificationsUrl + ' in: ' + delay + 'ms (reconnection number ' + n + ')')
           })
           .on('error', (err) => {
             debug('ws error on ' + notificationsUrl + ':', err)
