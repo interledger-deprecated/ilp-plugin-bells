@@ -77,7 +77,7 @@ describe('Connection methods', function () {
       assert.isTrue(this.plugin.isConnected())
     })
 
-    it('times out connection', function * () {
+    it('times out connection when it does not get the connect message', function * () {
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -95,6 +95,35 @@ describe('Connection methods', function () {
       // Unclear why but if this test overwrites this.wsRedLedger
       // it causes other tests to fail
       const wsRedLedger = new mockSocket.Server('ws://red.example/websocket?token=abc')
+      yield this.plugin.connect({ timeout: 10 }).should.be.rejectedWith(Error, /timed out before "connect"/)
+      wsRedLedger.stop()
+    })
+
+    it('times out connection when the notification subscription is never answered', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      this.wsRedLedger.stop()
+      // Unclear why but if this test overwrites this.wsRedLedger
+      // it causes other tests to fail
+      const wsRedLedger = new mockSocket.Server('ws://red.example/websocket?token=abc')
+      wsRedLedger.on('connection', () => {
+        wsRedLedger.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: null,
+          method: 'connect'
+        }))
+      })
       yield this.plugin.connect({ timeout: 10 }).should.be.rejectedWith(Error, /timed out before "connect"/)
       wsRedLedger.stop()
     })
@@ -796,6 +825,16 @@ describe('Connection methods', function () {
           assert.equal(spyConnect.callCount, i)
         }
         clock.restore()
+      })
+
+      it('should resend the subscribe message when it reconnects', function * () {
+        const spySubscribe = sinon.spy()
+        const subscribeMessage = '{"jsonrpc":"2.0","id":2,"method":"subscribe_account","params":{"eventType":"*","accounts":["http://red.example/accounts/mike"]}}'
+        spySubscribe.withArgs(subscribeMessage)
+        this.wsRedLedger.on('message', spySubscribe)
+        this.wsRedLedger.emit('close')
+        yield new Promise((resolve) => setTimeout(resolve, 10))
+        assert.isTrue(spySubscribe.withArgs(subscribeMessage).calledOnce)
       })
     })
   })

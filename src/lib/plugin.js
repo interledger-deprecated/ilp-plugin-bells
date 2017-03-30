@@ -285,10 +285,17 @@ class FiveBellsLedger extends EventEmitter2 {
 
             if (rpcMessage.method === 'connect') {
               if (!this.connected) {
-                this.emit('connect')
-                this.connected = true
+                // Re-subscribe to our account activity in case the ledger forgot us
+                // and only then emit 'connect' and resolve the promise
+                return this._subscribeAccounts([this.account])
+                  .then(() => {
+                    this.emit('connect')
+                    this.connected = true
+                    return resolve(null)
+                  })
+              } else {
+                return resolve(null)
               }
-              return resolve(null)
             }
             co.wrap(this._handleIncomingRpcMessage)
               .call(this, rpcMessage)
@@ -354,7 +361,6 @@ class FiveBellsLedger extends EventEmitter2 {
     ])
 
     return connectTimeoutRace
-      .then(() => this._subscribeAccounts([this.account]))
   }
 
   disconnect () {
