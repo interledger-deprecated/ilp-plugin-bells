@@ -288,6 +288,7 @@ class FiveBellsLedger extends EventEmitter2 {
                 // Re-subscribe to our account activity in case the ledger forgot us
                 // and only then emit 'connect' and resolve the promise
                 return this._subscribeAccounts([this.account])
+                  .catch(reject)
                   .then(() => {
                     this.emit('connect')
                     this.connected = true
@@ -702,7 +703,13 @@ class FiveBellsLedger extends EventEmitter2 {
       this.on('_rpc:response', listener)
       const rpcMessage = JSON.stringify({ jsonrpc: '2.0', id: requestId, method, params })
       debug('sending RPC message', rpcMessage)
-      this.ws.send(rpcMessage)
+      // If sending rejects we can reject immediately
+      this.ws.send(rpcMessage, (err) => {
+        if (err) {
+          debug('ws error sending rpc request:', err)
+          return reject(err)
+        }
+      })
     })
   }
 
