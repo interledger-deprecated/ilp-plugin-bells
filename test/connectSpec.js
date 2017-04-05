@@ -98,7 +98,7 @@ describe('Connection methods', function () {
       yield this.plugin.connect().should.be.rejectedWith(Error, /blah/)
     })
 
-    it('times out connection', function * () {
+    it('times out connection when it does not get the connect message', function * () {
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -113,8 +113,40 @@ describe('Connection methods', function () {
         .reply(200, {token: 'abc'})
 
       this.wsRedLedger.stop()
-      this.wsRedLedger = new mockSocket.Server('ws://red.example/websocket?token=abc')
+      // Unclear why but if this test overwrites this.wsRedLedger
+      // it causes other tests to fail
+      const wsRedLedger = new mockSocket.Server('ws://red.example/websocket?token=abc')
       yield this.plugin.connect({ timeout: 10 }).should.be.rejectedWith(Error, /timed out before "connect"/)
+      wsRedLedger.stop()
+    })
+
+    it('times out connection when the notification subscription is never answered', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      this.wsRedLedger.stop()
+      // Unclear why but if this test overwrites this.wsRedLedger
+      // it causes other tests to fail
+      const wsRedLedger = new mockSocket.Server('ws://red.example/websocket?token=abc')
+      wsRedLedger.on('connection', () => {
+        wsRedLedger.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: null,
+          method: 'connect'
+        }))
+      })
+      yield this.plugin.connect({ timeout: 10 }).should.be.rejectedWith(Error, /timed out before "connect"/)
+      wsRedLedger.stop()
     })
 
     it('doesn\'t connect when the "account" is invalid', function (done) {

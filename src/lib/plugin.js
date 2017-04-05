@@ -275,11 +275,17 @@ class FiveBellsLedger extends EventEmitter2 {
             }
 
             if (rpcMessage.method === 'connect') {
-              if (!this.connected) {
-                this.emit('connect')
-                this.connected = true
+              if (this.connected) {
+                return resolve(null)
+              } else {
+                return this._subscribeAccounts([this.account])
+                  .catch(reject)
+                  .then(() => {
+                    this.emit('connect')
+                    this.connected = true
+                    return resolve(null)
+                  })
               }
-              return resolve(null)
             }
             co.wrap(this._handleIncomingRpcMessage)
               .call(this, rpcMessage)
@@ -335,7 +341,6 @@ class FiveBellsLedger extends EventEmitter2 {
     ])
 
     return connectTimeoutRace
-      .then(() => this._subscribeAccounts([this.account]))
   }
 
   disconnect () {
