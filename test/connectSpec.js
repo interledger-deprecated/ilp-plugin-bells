@@ -76,6 +76,28 @@ describe('Connection methods', function () {
       assert.isTrue(this.plugin.isConnected())
     })
 
+    it('should reject if sending the subscription request fails', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      this.wsRedLedger.on('connection', () => {
+        sinon.stub(this.plugin.ws, 'send')
+          .callsArgWith(1, new Error('blah'))
+      })
+
+      yield this.plugin.connect().should.be.rejectedWith(Error, /blah/)
+    })
+
     it('times out connection', function * () {
       nock('http://red.example')
         .get('/accounts/mike')

@@ -677,7 +677,12 @@ class FiveBellsLedger extends EventEmitter2 {
       this.on('_rpc:response', listener)
       const rpcMessage = JSON.stringify({ jsonrpc: '2.0', id: requestId, method, params })
       debug('sending RPC message', rpcMessage)
-      this.ws.send(rpcMessage)
+      this.ws.send(rpcMessage, (err) => {
+        if (err) {
+          debug('error sending RPC message', err)
+          reject(err)
+        }
+      })
     })
   }
 
