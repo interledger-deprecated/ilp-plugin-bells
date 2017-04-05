@@ -31,6 +31,7 @@ describe('Connection methods', function () {
   })
 
   afterEach(function * () {
+    yield this.plugin.disconnect()
     this.wsRedLedger.stop()
     assert(nock.isDone(), 'nock should be called')
   })
@@ -740,31 +741,67 @@ describe('Connection methods', function () {
       }, 'Expected options.timeout to be a number, received: string')
     })
 
-    it('reconnects if the socket is closed', function * () {
-      nock('http://red.example')
-        .get('/accounts/mike')
-        .reply(200, {
-          ledger: 'http://red.example',
-          name: 'mike'
-        })
-      nock('http://red.example')
-        .get('/')
-        .reply(200, this.infoRedLedger)
-      nock('http://red.example')
-        .get('/auth_token')
-        .reply(200, {token: 'abc'})
+    describe('websocket reconnection', function () {
+      beforeEach(function * () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mike'
+          })
+        nock('http://red.example')
+          .get('/')
+          .reply(200, this.infoRedLedger)
+        nock('http://red.example')
+          .get('/auth_token')
+          .reply(200, {token: 'abc'})
+      })
 
-      assert.equal(this.plugin.isConnected(), false)
-      yield this.plugin.connect()
-      assert.equal(this.plugin.isConnected(), true)
-      this.plugin.ws.close()
-      assert.equal(this.plugin.isConnected(), false)
-      yield new Promise((resolve, reject) => {
-        // Wait for the plugin to reconnect.
-        setTimeout(() => {
-          assert.equal(this.plugin.isConnected(), true)
-          resolve()
-        }, 150)
+      it('reconnects if the socket is closed', function * () {
+        assert.equal(this.plugin.isConnected(), false)
+        yield this.plugin.connect()
+        assert.equal(this.plugin.isConnected(), true)
+        this.wsRedLedger.emit('close')
+        assert.equal(this.plugin.isConnected(), false)
+        yield new Promise((resolve, reject) => {
+          // Wait for the plugin to reconnect.
+          setTimeout(() => {
+            assert.equal(this.plugin.isConnected(), true)
+            resolve()
+          }, 20)
+        })
+      })
+
+      it('should reconnect if the websocket connection gets an error', function * () {
+        yield this.plugin.connect()
+        const spyConnection = sinon.spy()
+        this.wsRedLedger.on('connection', spyConnection)
+        this.wsRedLedger.emit('error', 'blah')
+        yield new Promise((resolve) => setTimeout(resolve, 20))
+        assert.equal(spyConnection.callCount, 1)
+      })
+
+      it('should reconnect if the websocket connection keeps closing', function * () {
+        yield this.plugin.connect()
+        const realImmediate = setImmediate
+        const clock = sinon.useFakeTimers()
+        const spyConnection = sinon.spy()
+        const spyDisconnect = sinon.spy()
+        const spyConnect = sinon.spy()
+        this.wsRedLedger.on('connection', spyConnection)
+        this.plugin.on('disconnect', spyDisconnect)
+        this.plugin.on('connect', spyConnect)
+        for (let i = 1; i < 10; i++) {
+          this.wsRedLedger.emit('close')
+          // it actually uses a fibonacci backoff
+          // but it won't be more than 500ms
+          clock.tick(500)
+          yield new Promise((resolve) => realImmediate(resolve))
+          assert.equal(spyConnection.callCount, i, 'server did not get the right number of connections')
+          assert.equal(spyDisconnect.callCount, i, 'plugin did not emit disconnect when it was supposed to')
+          assert.equal(spyConnect.callCount, i, 'plugin did not emit connect when it was supposed to')
+        }
+        clock.restore()
       })
     })
   })
