@@ -20,6 +20,8 @@ const util = require('util')
 const backoffMin = 1000
 const backoffMax = 30000
 const defaultConnectTimeout = 60000
+const wsReconnectDelayMin = 10
+const wsReconnectDelayMax = 500
 
 function wait (ms) {
   if (ms === Infinity) {
@@ -261,7 +263,13 @@ class FiveBellsLedger extends EventEmitter2 {
       // open a websocket connection to the websockets notification URL,
       // and wait for a "connect" RPC message on it.
       new Promise((resolve, reject) => {
-        this.connection = reconnect({immediate: true}, (ws) => {
+        this.connection = reconnect({
+          immediate: true,
+          // reconnect ASAP and don't stop trying...ever
+          initialDelay: wsReconnectDelayMin,
+          maxDelay: wsReconnectDelayMax,
+          failAfter: Infinity
+        }, (ws) => {
           ws.on('open', () => {
             debug('ws connected to ' + notificationsUrl)
           })
@@ -308,13 +316,13 @@ class FiveBellsLedger extends EventEmitter2 {
                 }
               })
           })
-          ws.on('error', () => {
-            debug('ws connection error on ' + notificationsUrl)
+          ws.on('error', (err) => {
+            debug('ws connection error on ' + notificationsUrl, err)
             reject(new UnreachableError('websocket connection error'))
           })
-          ws.on('close', () => {
+          ws.on('close', (code, reason) => {
             this.connected = false
-            debug('ws disconnected from ' + notificationsUrl)
+            debug('ws disconnected from ' + notificationsUrl + ' code: ' + code + ' reason: ' + reason)
             if (this.ready) {
               reject(new UnreachableError('websocket connection error'))
             }
@@ -329,8 +337,15 @@ class FiveBellsLedger extends EventEmitter2 {
           })
           .on('disconnect', () => {
             this.connected = false
-            this.emit('disconnect')
+            // remove listeners so we don't have duplicate event handlers when the ws reconnects
+            this.ws.removeAllListeners()
             this.ws = null
+            this.emit('disconnect')
+          })
+          .on('reconnect', (n, delay) => {
+            if (n > 0) {
+              debug('ws reconnect to ' + notificationsUrl + ' in ' + delay + 'ms (attempt ' + n + ')')
+            }
           })
           .on('error', (err) => {
             debug('ws error on ' + notificationsUrl + ':', err)
