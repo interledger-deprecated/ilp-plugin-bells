@@ -6,7 +6,7 @@ chai.use(chaiAsPromised)
 chai.should()
 
 const assert = chai.assert
-
+const sinon = require('sinon')
 const mock = require('mock-require')
 const nock = require('nock')
 const wsHelper = require('./helpers/ws')
@@ -335,6 +335,71 @@ describe('PluginBellsFactory', function () {
       })
     })
 
+    describe('websocket reconnection', function () {
+      it('should reconnect if the websocket connection drops', function * () {
+        yield this.factory.connect()
+
+        const connectionSpy = sinon.spy()
+        this.wsRedLedger.on('connection', connectionSpy)
+        this.wsRedLedger.emit('close')
+        yield new Promise((resolve) => setImmediate(resolve))
+        assert.isFalse(this.factory.isConnected())
+        yield new Promise((resolve) => setTimeout(resolve, 20))
+        assert(connectionSpy.callCount === 1, 'plugin should reconnect')
+        yield new Promise((resolve) => setImmediate(resolve))
+        assert.isTrue(this.factory.isConnected(), 'plugin should say it is connected')
+      })
+
+      it('should resubscribe to the accounts of each plugin if the websocket connection drops', function * () {
+        yield this.factory.connect()
+
+        const subscribeMessage = JSON.stringify({
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'subscribe_account',
+          params: {
+            eventType: '*',
+            accounts: [
+              'http://red.example/accounts/mike',
+              'http://red.example/accounts/mary',
+              'http://red.example/accounts/bob'
+            ]
+          }
+        })
+
+        nock('http://red.example')
+          .get('/accounts/mary')
+          .basicAuth({
+            user: 'admin',
+            pass: 'admin'
+          })
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mary'
+          })
+          .get('/accounts/bob')
+          .basicAuth({
+            user: 'admin',
+            pass: 'admin'
+          })
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'bob'
+          })
+
+        const connectionSpy = sinon.spy()
+        connectionSpy.withArgs(subscribeMessage)
+
+        this.wsRedLedger.on('message', connectionSpy)
+        yield this.factory.create({ username: 'mary' })
+        yield this.factory.create({ username: 'bob' })
+
+        this.wsRedLedger.emit('close')
+        yield new Promise((resolve) => setImmediate(resolve))
+        assert(connectionSpy.withArgs(subscribeMessage).calledOnce, 'factory should resubscribe to all accounts')
+      })
+    })
+
     describe('remove', function () {
       it('removes a plugin', function * () {
         yield this.factory.remove('mike')
@@ -421,21 +486,6 @@ describe('PluginBellsFactory', function () {
         prefix: 'example.red.',
         globalSubscription: true
       })
-
-      yield this.factory.connect()
-      assert.isTrue(this.factory.isConnected())
-
-      const nockMike = nock('http://red.example')
-        .get('/accounts/mike')
-        .reply(200, {
-          ledger: 'http://red.example',
-          name: 'admin'
-        })
-
-      this.plugin = yield this.factory.create({ username: 'mike' })
-      assert.isOk(this.factory.plugins.get('mike'))
-
-      nockMike.done()
     })
 
     afterEach(function * () {
@@ -444,6 +494,35 @@ describe('PluginBellsFactory', function () {
     })
 
     describe('connect', function () {
+      it('should subscribe to all accounts', function * () {
+        const subscribedPromise = new Promise((resolve, reject) => {
+          this.wsRedLedger.on('message', (message) => {
+            const parsed = JSON.parse(message)
+            if (parsed.method === 'subscribe_all_accounts' && parsed.params.eventType === '*') {
+              resolve()
+            }
+          })
+        })
+
+        yield this.factory.connect()
+        yield subscribedPromise
+      })
+    })
+
+    describe('notification passing', function () {
+      beforeEach(function * () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'admin'
+          })
+
+        yield this.factory.connect()
+        this.plugin = yield this.factory.create({ username: 'mike' })
+        assert.isOk(this.factory.plugins.get('mike'))
+      })
+
       it('will pass a notification to the correct plugin', function * () {
         const handled = new Promise((resolve, reject) => {
           this.plugin.on('incoming_transfer', resolve)
@@ -460,10 +539,12 @@ describe('PluginBellsFactory', function () {
           }
         }))
 
+        yield this.factory.connect()
         yield handled
       })
 
       it('will emit global notifications for a transfer', function * () {
+        yield this.factory.connect()
         const handledIncoming = new Promise((resolve, reject) => {
           this.factory.on('incoming_transfer', resolve)
         })
@@ -487,6 +568,7 @@ describe('PluginBellsFactory', function () {
       })
 
       it('will pass a message to the correct plugin', function * () {
+        yield this.factory.connect()
         const handled = new Promise((resolve, reject) => {
           this.plugin.on('incoming_message', resolve)
         })
@@ -532,6 +614,24 @@ describe('PluginBellsFactory', function () {
         }))
 
         yield handled
+      })
+
+    })
+
+    describe('websocket reconnection', function () {
+      it('will resubscribe to all accounts if the websocket connection drops', function * () {
+        yield this.factory.connect()
+
+        const subscribedPromise = new Promise((resolve, reject) => {
+          this.wsRedLedger.on('message', (message) => {
+            const parsed = JSON.parse(message)
+            if (parsed.method === 'subscribe_all_accounts' && parsed.params.eventType === '*') {
+              resolve()
+            }
+          })
+        })
+
+        yield subscribedPromise
       })
     })
   })

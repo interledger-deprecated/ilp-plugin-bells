@@ -38,29 +38,27 @@ class PluginFactory extends EventEmitter2 {
     return co.wrap(this._connect).call(this, options)
   }
   * _connect (options) {
-    if (this.adminPlugin) return yield this.adminPlugin.connect(options)
+    if (!this.adminPlugin) {
+      // create the central admin instance
+      this.adminPlugin = new Plugin({
+        username: this.adminUsername,
+        password: this.adminPassword,
+        account: this.adminAccount,
+        prefix: this.configPrefix
+      })
+      this.adminPlugin.removeAllListeners('_rpc:notification')
+      this.adminPlugin.on('_rpc:notification', (notif) =>
+        co.wrap(this._routeNotification).call(this, notif))
 
-    // create the central admin instance
-    this.adminPlugin = new Plugin({
-      username: this.adminUsername,
-      password: this.adminPassword,
-      account: this.adminAccount,
-      prefix: this.configPrefix
-    })
-    this.adminPlugin.removeAllListeners('_rpc:notification')
-    this.adminPlugin.on('_rpc:notification', (notif) =>
-      co.wrap(this._routeNotification).call(this, notif))
+      this.adminPlugin.on('connect', this._subscribeAccounts.bind(this))
+    }
 
     debug('connecting admin plugin')
     yield this.adminPlugin.connect(options)
+    // TODO wait to resolve until we have subscribed to accounts
 
     // store the shared context
     this.ledgerContext = this.adminPlugin.ledgerContext
-
-    if (this.globalSubscription) {
-      debug('subscribing to all accounts')
-      this.adminPlugin._subscribeAllAccounts()
-    }
 
     this.ready = true
   }
@@ -178,16 +176,21 @@ class PluginFactory extends EventEmitter2 {
 
     // stop plugin from double-connecting
     plugin.disconnect = function () { return Promise.resolve(null) }
-    plugin.connect = function () { return Promise.resolve(null) }
+    plugin.connect = function () {
+      // TODO this should wait until the admin is subscribed to the account notifications
+      return Promise.resolve(null)
+    }
     plugin.isConnected = () => this.isConnected()
 
     plugin.ledgerContext = this.ledgerContext
 
     this.plugins.set(username, plugin)
-    if (!this.globalSubscription) {
-      yield this.adminPlugin._subscribeAccounts(this._pluginAccounts())
+
+    if (!this.glogbalSubscription) {
+      yield this._subscribeAccounts()
     }
 
+    debug('created plugin for account: ' + account)
     return plugin
   }
 
@@ -199,6 +202,7 @@ class PluginFactory extends EventEmitter2 {
     // delete all listeners to stop memory leaks
     this.plugins.get(username).removeAllListeners()
     this.plugins.delete(username)
+    // TODO should we resubscribe without that account included?
     return Promise.resolve(null)
   }
 
@@ -209,6 +213,20 @@ class PluginFactory extends EventEmitter2 {
       accounts.push(plugin.account)
     }
     return accounts
+  }
+
+  _subscribeAccounts () {
+    if (this.globalSubscription) {
+      debug('subscribing to all accounts')
+      return this.adminPlugin._subscribeAllAccounts()
+    } else {
+      const accounts = this._pluginAccounts()
+      if (accounts.length === 0) {
+        return Promise.resolve()
+      }
+      debug('subscribing to accounts: ' + accounts.join(', '))
+      return this.adminPlugin._subscribeAccounts(accounts)
+    }
   }
 
   * _handleGlobalNotification (account, notification) {
