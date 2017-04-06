@@ -209,7 +209,7 @@ describe('PluginBellsFactory', function () {
         }).catch(done)
       })
 
-      it('subscribes to the new account', function (done) {
+      it('subscribes to the new account', function * () {
         nock('http://red.example')
           .get('/accounts/mary')
           .basicAuth({
@@ -220,25 +220,25 @@ describe('PluginBellsFactory', function () {
             ledger: 'http://red.example',
             name: 'admin'
           })
-
-        this.wsRedLedger.on('message', (rpcMessageString) => {
-          const rpcMessage = JSON.parse(rpcMessageString)
-          assert.deepEqual(rpcMessage, {
-            jsonrpc: '2.0',
-            id: 2,
-            method: 'subscribe_account',
-            params: {
-              eventType: '*',
-              accounts: ['http://red.example/accounts/mary']
-            }
-          })
-          done()
+        const subscribeMessage = JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'subscribe_account',
+          params: {
+            eventType: '*',
+            accounts: ['http://red.example/accounts/mary']
+          }
         })
-        this.factory.create({ username: 'mary' }).catch(done)
+        const subscribeSpy = sinon.spy()
+        subscribeSpy.withArgs(subscribeMessage)
+        this.wsRedLedger.on('message', subscribeSpy)
+        this.wsRedLedger.on('message', (a) => console.log(a))
+
+        yield this.factory.create({ username: 'mary' })
+        assert(subscribeSpy.withArgs(subscribeMessage).calledOnce, 'must subscribe')
       })
 
       it('resolves when it has gotten the subscription response', function * () {
-        console.log('xx')
         nock('http://red.example')
           .get('/accounts/mary')
           .basicAuth({
@@ -249,24 +249,22 @@ describe('PluginBellsFactory', function () {
             ledger: 'http://red.example',
             name: 'mary'
           })
+        const subscribeMessage = JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'subscribe_account',
+          params: {
+            eventType: '*',
+            accounts: ['http://red.example/accounts/mary']
+          }
+        })
 
         const subscribePromise = new Promise((resolve, reject) => {
           this.wsRedLedger.on('message', (rpcMessageString) => {
-            const rpcMessage = JSON.parse(rpcMessageString)
-            try {
-              assert.deepEqual(rpcMessage, {
-                jsonrpc: '2.0',
-                id: 2,
-                method: 'subscribe_account',
-                params: {
-                  eventType: '*',
-                  accounts: ['http://red.example/accounts/mary']
-                }
-              })
-            } catch (e) {
-              reject(e)
+            console.log(rpcMessageString)
+            if (rpcMessageString === subscribeMessage) {
+              resolve('subscribe')
             }
-            resolve('subscribe')
           })
         })
         const createPromise = this.factory.create({ username: 'mary' }).then(() => 'create')
@@ -434,7 +432,7 @@ describe('PluginBellsFactory', function () {
 
         const subscribeMessage = JSON.stringify({
           jsonrpc: '2.0',
-          id: 3,
+          id: 4,
           method: 'subscribe_account',
           params: {
             eventType: '*',
@@ -498,6 +496,20 @@ describe('PluginBellsFactory', function () {
       it('removes a plugin', function * () {
         yield this.factory.remove('mike')
         assert.isNotOk(this.factory.plugins.get('mike'))
+      })
+
+      it('resubscribes without the removed account', function * () {
+        const subscribePromise = new Promise((resolve, reject) => {
+          this.wsRedLedger.on('message', (rpcString) => {
+            const rpcMessage = JSON.parse(rpcString)
+            console.log(rpcMessage)
+            if (rpcMessage.method === 'subscribe_account' && rpcMessage.params.accounts.length === 0) {
+              resolve()
+            }
+          })
+        })
+        yield this.factory.remove('mike')
+        yield subscribePromise
       })
     })
   })

@@ -207,8 +207,11 @@ class PluginFactory extends EventEmitter2 {
     // delete all listeners to stop memory leaks
     this.plugins.get(username).removeAllListeners()
     this.plugins.delete(username)
-    // TODO should we resubscribe without that account included?
-    return Promise.resolve(null)
+    if (this.globalSubscription) {
+      return Promise.resolve(null)
+    } else {
+      return this._subscribeAccounts()
+    }
   }
 
   _pluginAccounts () {
@@ -226,9 +229,6 @@ class PluginFactory extends EventEmitter2 {
       return this.adminPlugin._subscribeAllAccounts()
     } else {
       const accounts = this._pluginAccounts()
-      if (accounts.length === 0) {
-        return Promise.resolve()
-      }
       debug('subscribing to accounts: ' + accounts.join(', '))
       return this.adminPlugin._subscribeAccounts(accounts)
     }
