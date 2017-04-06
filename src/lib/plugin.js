@@ -23,77 +23,6 @@ const defaultConnectTimeout = 60000
 const wsReconnectDelayMin = 10
 const wsReconnectDelayMax = 500
 
-function wait (ms) {
-  if (ms === Infinity) {
-    return new Promise((resolve) => {})
-  }
-
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
-
-function * resolveWebfingerOptions (identifier) {
-  const host = identifier.split('@')[1]
-  const resource = 'acct:' + identifier
-
-  const res = yield request({
-    uri: 'https://' + host + '/.well-known/webfinger?resource=' + resource,
-    json: true
-  })
-
-  if (res.body.subject !== resource) {
-    throw new Error('subject (' + res.body.subject + ') doesn\'t match resource (' + resource + ')')
-  } else if (!res.body.links || typeof res.body.links !== 'object') {
-    throw new Error('result body doesn\'t contain links (' + resource + ')')
-  }
-
-  const newOptions = { credentials: {} }
-
-  for (let link of res.body.links) {
-    if (link.rel === 'https://interledger.org/rel/ledgerAccount') {
-      newOptions.credentials.account = newOptions.account = link.href
-    } else if (link.rel === 'https://interledger.org/rel/ilpAddress') {
-      newOptions.credentials.username = link.href.split('.').pop()
-    }
-  }
-
-  if (!newOptions.account || !newOptions.credentials.username) {
-    throw new Error('failed to get essential fields from ' + JSON.stringify(res.body))
-  }
-
-  return newOptions
-}
-
-function * requestRetry (requestOptions, retryOptions) {
-  let delay = backoffMin
-  const start = Date.now()
-  const timeout = retryOptions.timeout
-  while (true) {
-    debug('connecting to account ' + requestOptions.uri)
-    try {
-      const res = yield request(requestOptions)
-      if (res.statusCode >= 400 && res.statusCode < 500) {
-        break
-      } else if (res.statusCode >= 500) {
-        throw new Error(requestOptions.uri +
-          ' failed with status code ' +
-          res.statusCode)
-      }
-      return res
-    } catch (err) {
-      delay = Math.min(Math.floor(1.5 * delay), backoffMax)
-      if (Date.now() + delay - start > timeout) {
-        throw new Error(retryOptions.errorMessage + ': timeout')
-      }
-      debug('http request failed: ' + err.message + '; retrying')
-      yield wait(delay)
-    }
-  }
-  debug('http request failed. aborting.')
-  throw new Error(retryOptions.errorMessage)
-}
-
 class FiveBellsLedger extends EventEmitter2 {
   constructor (options) {
     super()
@@ -245,33 +174,42 @@ class FiveBellsLedger extends EventEmitter2 {
     const authToken = yield this._getAuthToken()
     if (!authToken) throw new Error('Unable to get auth token from ledger')
     const notificationsUrl = this.ledgerContext.urls.websocket + '?token=' + encodeURIComponent(authToken)
+    yield this._connectToWebsocket({
+      timeout: options.timeout,
+      uri: notificationsUrl
+    })
+  }
+
+  _connectToWebsocket(options) {
+    const wsUri = options.uri
+    const timeout = options.timeout
+    const reconnectOptions = {
+      immediate: true,
+      // reconnect ASAP and don't stop trying...ever
+      initialDelay: wsReconnectDelayMin,
+      maxDelay: wsReconnectDelayMax,
+      failAfter: Infinity
+    }
+
     const reconnect = reconnectCore(() => {
-      return new WebSocket(notificationsUrl)
+      return new WebSocket(wsUri)
     })
 
-    const timeout = options.timeout
-    const connectTimeoutRace = Promise.race([
-      // if the timeout occurs before the websocket is successfully established,
-      // the connect function will throw an error.
+    // reject if the timeout occurs before the websocket is successfully established
+    return Promise.race([
       wait(timeout).then(() => {
         throw new Error('websocket connection to ' +
-          notificationsUrl +
-          ' timed out before "connect" RPC message was received (' +
-          timeout +
-          ' ms)')
+          wsUri +
+            ' timed out before "connect" RPC message was received (' +
+            timeout +
+            ' ms)')
       }),
       // open a websocket connection to the websockets notification URL,
       // and wait for a "connect" RPC message on it.
       new Promise((resolve, reject) => {
-        this.connection = reconnect({
-          immediate: true,
-          // reconnect ASAP and don't stop trying...ever
-          initialDelay: wsReconnectDelayMin,
-          maxDelay: wsReconnectDelayMax,
-          failAfter: Infinity
-        }, (ws) => {
+        this.connection = reconnect(reconnectOptions, (ws) => {
           ws.on('open', () => {
-            debug('ws connected to ' + notificationsUrl)
+            debug('ws opened: ' + wsUri)
           })
           ws.on('message', (rpcMessageString) => {
             let rpcMessage
@@ -289,7 +227,7 @@ class FiveBellsLedger extends EventEmitter2 {
                 return this._subscribeAccounts([this.account])
                   .catch(reject)
                   .then(() => {
-                    debug('plugin connected to: ' + notificationsUrl)
+                    debug('plugin connected to: ' + wsUri)
                     this.emit('connect')
                     this.connected = true
                     return resolve(null)
@@ -318,12 +256,12 @@ class FiveBellsLedger extends EventEmitter2 {
               })
           })
           ws.on('error', (err) => {
-            debug('ws connection error on ' + notificationsUrl, err)
+            debug('ws connection error on ' + wsUri, err)
             reject(new UnreachableError('websocket connection error'))
           })
           ws.on('close', (code, reason) => {
             this.connected = false
-            debug('ws disconnected from ' + notificationsUrl + ' code: ' + code + ' reason: ' + reason)
+            debug('ws disconnected from ' + wsUri + ' code: ' + code + ' reason: ' + reason)
             if (this.ready) {
               reject(new UnreachableError('websocket connection error'))
             }
@@ -337,7 +275,7 @@ class FiveBellsLedger extends EventEmitter2 {
             this.ws = ws
           })
           .on('disconnect', () => {
-            debug('plugin disconnected from: ' + notificationsUrl)
+            debug('plugin disconnected from: ' + wsUri)
             this.connected = false
             // remove listeners so we don't have duplicate event handlers when the ws reconnects
             this.ws.removeAllListeners()
@@ -346,18 +284,16 @@ class FiveBellsLedger extends EventEmitter2 {
           })
           .on('reconnect', (n, delay) => {
             if (n > 0) {
-              debug('ws reconnect to ' + notificationsUrl + ' in ' + delay + 'ms (attempt ' + n + ')')
+              debug('ws reconnect to ' + wsUri + ' in ' + delay + 'ms (attempt ' + n + ')')
             }
           })
           .on('error', (err) => {
-            debug('ws error on ' + notificationsUrl + ':', err)
+            debug('ws error on ' + wsUri + ':', err)
             reject(err)
           })
           .connect()
       })
     ])
-
-    return connectTimeoutRace
   }
 
   disconnect () {
@@ -779,5 +715,77 @@ function getResponseJSON (res) {
   if (contentType.indexOf('application/json') !== 0) return
   return JSON.parse(res.body)
 }
+
+function wait (ms) {
+  if (ms === Infinity) {
+    return new Promise((resolve) => {})
+  }
+
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+function * resolveWebfingerOptions (identifier) {
+  const host = identifier.split('@')[1]
+  const resource = 'acct:' + identifier
+
+  const res = yield request({
+    uri: 'https://' + host + '/.well-known/webfinger?resource=' + resource,
+    json: true
+  })
+
+  if (res.body.subject !== resource) {
+    throw new Error('subject (' + res.body.subject + ') doesn\'t match resource (' + resource + ')')
+  } else if (!res.body.links || typeof res.body.links !== 'object') {
+    throw new Error('result body doesn\'t contain links (' + resource + ')')
+  }
+
+  const newOptions = { credentials: {} }
+
+  for (let link of res.body.links) {
+    if (link.rel === 'https://interledger.org/rel/ledgerAccount') {
+      newOptions.credentials.account = newOptions.account = link.href
+    } else if (link.rel === 'https://interledger.org/rel/ilpAddress') {
+      newOptions.credentials.username = link.href.split('.').pop()
+    }
+  }
+
+  if (!newOptions.account || !newOptions.credentials.username) {
+    throw new Error('failed to get essential fields from ' + JSON.stringify(res.body))
+  }
+
+  return newOptions
+}
+
+function * requestRetry (requestOptions, retryOptions) {
+  let delay = backoffMin
+  const start = Date.now()
+  const timeout = retryOptions.timeout
+  while (true) {
+    debug('connecting to account ' + requestOptions.uri)
+    try {
+      const res = yield request(requestOptions)
+      if (res.statusCode >= 400 && res.statusCode < 500) {
+        break
+      } else if (res.statusCode >= 500) {
+        throw new Error(requestOptions.uri +
+          ' failed with status code ' +
+          res.statusCode)
+      }
+      return res
+    } catch (err) {
+      delay = Math.min(Math.floor(1.5 * delay), backoffMax)
+      if (Date.now() + delay - start > timeout) {
+        throw new Error(retryOptions.errorMessage + ': timeout')
+      }
+      debug('http request failed: ' + err.message + '; retrying')
+      yield wait(delay)
+    }
+  }
+  debug('http request failed. aborting.')
+  throw new Error(retryOptions.errorMessage)
+}
+
 
 module.exports = FiveBellsLedger
