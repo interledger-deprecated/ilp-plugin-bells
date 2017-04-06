@@ -15,7 +15,7 @@ const omitNil = require('lodash/fp/omitBy')(isNil)
 const translate = require('./translate')
 const LedgerContext = require('./ledger-context')
 
-const backoffMin = 1000
+const backoffMin = 100
 const backoffMax = 30000
 const defaultConnectTimeout = 60000
 const wsReconnectDelayMin = 10
