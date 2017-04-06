@@ -232,7 +232,6 @@ describe('PluginBellsFactory', function () {
         const subscribeSpy = sinon.spy()
         subscribeSpy.withArgs(subscribeMessage)
         this.wsRedLedger.on('message', subscribeSpy)
-        this.wsRedLedger.on('message', (a) => console.log(a))
 
         yield this.factory.create({ username: 'mary' })
         assert(subscribeSpy.withArgs(subscribeMessage).calledOnce, 'must subscribe')
@@ -261,7 +260,6 @@ describe('PluginBellsFactory', function () {
 
         const subscribePromise = new Promise((resolve, reject) => {
           this.wsRedLedger.on('message', (rpcMessageString) => {
-            console.log(rpcMessageString)
             if (rpcMessageString === subscribeMessage) {
               resolve('subscribe')
             }
@@ -502,7 +500,6 @@ describe('PluginBellsFactory', function () {
         const subscribePromise = new Promise((resolve, reject) => {
           this.wsRedLedger.on('message', (rpcString) => {
             const rpcMessage = JSON.parse(rpcString)
-            console.log(rpcMessage)
             if (rpcMessage.method === 'subscribe_account' && rpcMessage.params.accounts.length === 0) {
               resolve()
             }
@@ -748,7 +745,6 @@ describe('PluginBellsFactory', function () {
         const subscribedPromise = new Promise((resolve, reject) => {
           this.wsRedLedger.on('message', (message) => {
             const parsed = JSON.parse(message)
-            console.log(parsed)
             if (parsed.method === 'subscribe_all_accounts' && parsed.params.eventType === '*') {
               resolve()
             }

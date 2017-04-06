@@ -751,7 +751,7 @@ describe('Connection methods', function () {
       nock('http://red.example')
         .get('/accounts/mike')
         .replyWithError('fail')
-      return assert.isRejected(this.plugin.connect({timeout: 1000}),
+      return assert.isRejected(this.plugin.connect({timeout: 110}),
         /Unable to connect to account: timeout/)
     })
 
