@@ -180,7 +180,7 @@ class FiveBellsLedger extends EventEmitter2 {
     })
   }
 
-  _connectToWebsocket(options) {
+  _connectToWebsocket (options) {
     const wsUri = options.uri
     const timeout = options.timeout
     const reconnectOptions = {
@@ -786,6 +786,5 @@ function * requestRetry (requestOptions, retryOptions) {
   debug('http request failed. aborting.')
   throw new Error(retryOptions.errorMessage)
 }
-
 
 module.exports = FiveBellsLedger
