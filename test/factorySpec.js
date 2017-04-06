@@ -88,25 +88,6 @@ describe('PluginBellsFactory', function () {
         adminAccount: 'http://red.example/accounts/admin',
         prefix: 'example.red.'
       })
-
-      yield this.factory.connect()
-      assert.isTrue(this.factory.isConnected())
-
-      const nockMike = nock('http://red.example')
-        .get('/accounts/mike')
-        .basicAuth({
-          user: 'admin',
-          pass: 'admin'
-        })
-        .reply(200, {
-          ledger: 'http://red.example',
-          name: 'admin'
-        })
-
-      this.plugin = yield this.factory.create({ username: 'mike' })
-      assert.isOk(this.factory.plugins.get('mike'))
-
-      nockMike.done()
     })
 
     afterEach(function * () {
@@ -117,86 +98,24 @@ describe('PluginBellsFactory', function () {
     describe('connect', function () {
       it('will not connect twice', function * () {
         yield this.factory.connect()
+        yield this.factory.connect()
         assert.isTrue(this.factory.isConnected())
       })
+    })
 
+    describe('disconnect', function () {
       it('disconnects', function * () {
+        yield this.factory.connect()
         yield this.factory.disconnect()
         assert.isFalse(this.factory.isConnected())
-      })
-
-      it('will pass a notification to the correct plugin', function * () {
-        const handled = new Promise((resolve, reject) => {
-          this.plugin.on('incoming_transfer', resolve)
-        })
-
-        this.wsRedLedger.send(JSON.stringify({
-          jsonrpc: '2.0',
-          id: null,
-          method: 'notify',
-          params: {
-            event: 'transfer.update',
-            resource: this.fiveBellsTransferMike,
-            related_resources: {}
-          }
-        }))
-
-        yield handled
-      })
-
-      it('will pass a message to the correct plugin', function * () {
-        const handled = new Promise((resolve, reject) => {
-          this.plugin.on('incoming_message', resolve)
-        })
-
-        this.wsRedLedger.send(JSON.stringify({
-          jsonrpc: '2.0',
-          id: null,
-          method: 'notify',
-          params: {
-            event: 'message.send',
-            resource: {
-              ledger: 'http://red.example',
-              to: 'http://red.example/accounts/mike',
-              from: 'http://red.example/accounts/alice',
-              data: {}
-            },
-            related_resources: {}
-          }
-        }))
-
-        yield handled
-      })
-
-      it('send a message as the correct username', function * () {
-        nock('http://red.example')
-          .post('/messages', {
-            from: 'http://red.example/accounts/mike',
-            to: 'http://red.example/accounts/alice',
-            ledger: 'http://red.example',
-            data: { foo: 'bar' }
-          })
-          .basicAuth({user: 'admin', pass: 'admin'})
-          .reply(200)
-
-        yield this.plugin.sendMessage({
-          ledger: 'example.red.',
-          account: 'example.red.alice',
-          data: { foo: 'bar' }
-        })
-      })
-
-      it('sends a transfer with the correct fields', function * () {
-        nock('http://red.example')
-          .put('/transfers/' + this.transfer.id, this.fiveBellsTransferAlice)
-          .basicAuth({user: 'admin', pass: 'admin'})
-          .reply(200)
-
-        yield this.plugin.sendTransfer(this.transfer)
       })
     })
 
     describe('create', function () {
+      beforeEach(function * () {
+        yield this.factory.connect()
+      })
+
       it('will not create a nonexistant account', function * () {
         const nockBob = nock('http://red.example')
           .get('/accounts/bob')
@@ -212,32 +131,67 @@ describe('PluginBellsFactory', function () {
       })
 
       it('will create a plugin', function * () {
-        assert.isObject(this.plugin)
-        assert.isTrue(this.plugin.isConnected())
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .basicAuth({
+            user: 'admin',
+            pass: 'admin'
+          })
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'admin'
+          })
 
         const plugin = yield this.factory.create({ username: 'mike' })
-        assert.equal(this.plugin, plugin, 'only one plugin should be made per account')
+        assert.isObject(plugin)
+        assert.isTrue(plugin.isConnected())
+      })
+
+      it('will not create more than one plugin per account', function * () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .basicAuth({
+            user: 'admin',
+            pass: 'admin'
+          })
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'admin'
+          })
+
+        const plugin1 = yield this.factory.create({ username: 'mike' })
+        const plugin2 = yield this.factory.create({ username: 'mike' })
+        assert.equal(plugin1, plugin2, 'only one plugin should be made per account')
       })
 
       it('will create a plugin with account', function * () {
-        assert.isObject(this.plugin)
-        assert.isTrue(this.plugin.isConnected())
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .basicAuth({
+            user: 'admin',
+            pass: 'admin'
+          })
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'admin'
+          })
 
         const plugin = yield this.factory.create({ account: 'http://red.example/accounts/mike' })
-        assert.equal(this.plugin, plugin, 'account should resolve to same username')
+        assert.isObject(plugin)
+        assert.isTrue(plugin.isConnected())
+        assert.equal(plugin.username, 'mike', 'account should resolve to same username')
       })
 
       it('will allow a username with underscores and dashes', function * () {
         const username = 'mike_12-34'
-        const nockMike = nock('http://red.example')
+        nock('http://red.example')
           .get('/accounts/' + username)
           .reply(200)
-        assert.isObject(this.plugin)
-        assert.isTrue(this.plugin.isConnected())
 
         const plugin = yield this.factory.create({ account: 'http://red.example/accounts/' + username })
+        assert.isObject(plugin)
+        assert.isTrue(plugin.isConnected())
         assert.equal(plugin.username, username, 'account should resolve to same username')
-        nockMike.done()
       })
 
       it('throws an error when account and username are both supplied', function (done) {
@@ -266,16 +220,53 @@ describe('PluginBellsFactory', function () {
           const rpcMessage = JSON.parse(rpcMessageString)
           assert.deepEqual(rpcMessage, {
             jsonrpc: '2.0',
-            id: 3,
+            id: 2,
             method: 'subscribe_account',
             params: {
               eventType: '*',
-              accounts: ['http://red.example/accounts/mike', 'http://red.example/accounts/mary']
+              accounts: ['http://red.example/accounts/mary']
             }
           })
           done()
         })
         this.factory.create({ username: 'mary' }).catch(done)
+      })
+
+      it('resolves when it has gotten the subscription response', function * () {
+        console.log('xx')
+        nock('http://red.example')
+          .get('/accounts/mary')
+          .basicAuth({
+            user: 'admin',
+            pass: 'admin'
+          })
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'mary'
+          })
+
+        const subscribePromise = new Promise((resolve, reject) => {
+          this.wsRedLedger.on('message', (rpcMessageString) => {
+            const rpcMessage = JSON.parse(rpcMessageString)
+            try {
+              assert.deepEqual(rpcMessage, {
+                jsonrpc: '2.0',
+                id: 2,
+                method: 'subscribe_account',
+                params: {
+                  eventType: '*',
+                  accounts: ['http://red.example/accounts/mary']
+                }
+              })
+            } catch (e) {
+              reject(e)
+            }
+            resolve('subscribe')
+          })
+        })
+        const createPromise = this.factory.create({ username: 'mary' }).then(() => 'create')
+        const firstExecuted = yield Promise.race([subscribePromise, createPromise])
+        assert.equal(firstExecuted, 'subscribe', 'must subscribe first')
       })
 
       it('will throw if given an invalid opts.username', function (done) {
@@ -320,6 +311,104 @@ describe('PluginBellsFactory', function () {
       })
     })
 
+    describe('notification passing', function () {
+      beforeEach(function * () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .basicAuth({
+            user: 'admin',
+            pass: 'admin'
+          })
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'admin'
+          })
+
+        yield this.factory.connect()
+        this.plugin = yield this.factory.create({ username: 'mike' })
+      })
+
+      it('will pass a notification to the correct plugin', function * () {
+        const handled = new Promise((resolve, reject) => {
+          this.plugin.on('incoming_transfer', resolve)
+        })
+
+        this.wsRedLedger.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: null,
+          method: 'notify',
+          params: {
+            event: 'transfer.update',
+            resource: this.fiveBellsTransferMike,
+            related_resources: {}
+          }
+        }))
+
+        yield handled
+      })
+
+      it('will pass a message to the correct plugin', function * () {
+        const handled = new Promise((resolve, reject) => {
+          this.plugin.on('incoming_message', resolve)
+        })
+
+        this.wsRedLedger.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: null,
+          method: 'notify',
+          params: {
+            event: 'message.send',
+            resource: {
+              ledger: 'http://red.example',
+              to: 'http://red.example/accounts/mike',
+              from: 'http://red.example/accounts/alice',
+              data: {}
+            },
+            related_resources: {}
+          }
+        }))
+
+        yield handled
+      })
+      const formats = ['legacy', 'current']
+      formats.map(format => {
+        it(`send a ${format}-format message as the correct username`, function * () {
+          nock('http://red.example')
+            .post('/messages', {
+              from: 'http://red.example/accounts/mike',
+              to: 'http://red.example/accounts/alice',
+              ledger: 'http://red.example',
+              data: { foo: 'bar' }
+            })
+            .basicAuth({user: 'admin', pass: 'admin'})
+            .reply(200)
+
+          const msg = {
+            legacy: {
+              ledger: 'example.red.',
+              account: 'example.red.alice',
+              data: { foo: 'bar' }
+            },
+            current: {
+              ledger: 'example.red.',
+              to: 'example.red.alice',
+              data: { foo: 'bar' }
+            }
+          }
+          yield this.plugin.sendMessage(msg[format])
+        })
+
+        it(`sends a ${format}-format transfer with the correct fields`, function * () {
+          nock('http://red.example')
+            .put('/transfers/' + this.transfer.current.id, this.fiveBellsTransferAlice)
+            .basicAuth({user: 'admin', pass: 'admin'})
+            .reply(200)
+
+          yield this.plugin.sendTransfer(this.transfer[format])
+        })
+      })
+    })
+
     describe('websocket reconnection', function () {
       it('should reconnect if the websocket connection drops', function * () {
         yield this.factory.connect()
@@ -340,12 +429,11 @@ describe('PluginBellsFactory', function () {
 
         const subscribeMessage = JSON.stringify({
           jsonrpc: '2.0',
-          id: 4,
+          id: 3,
           method: 'subscribe_account',
           params: {
             eventType: '*',
             accounts: [
-              'http://red.example/accounts/mike',
               'http://red.example/accounts/mary',
               'http://red.example/accounts/bob'
             ]
@@ -386,6 +474,22 @@ describe('PluginBellsFactory', function () {
     })
 
     describe('remove', function () {
+      beforeEach(function * () {
+        nock('http://red.example')
+          .get('/accounts/mike')
+          .basicAuth({
+            user: 'admin',
+            pass: 'admin'
+          })
+          .reply(200, {
+            ledger: 'http://red.example',
+            name: 'admin'
+          })
+
+        yield this.factory.connect()
+        this.plugin = yield this.factory.create({ username: 'mike' })
+      })
+
       it('removes a plugin', function * () {
         yield this.factory.remove('mike')
         assert.isNotOk(this.factory.plugins.get('mike'))
@@ -487,6 +591,22 @@ describe('PluginBellsFactory', function () {
         yield this.factory.connect()
         yield subscribedPromise
       })
+
+      it.skip('should resolve only after subscribing to the accounts', function * () {
+        const connectPromise = this.factory.connect().then(() => 'connect')
+        const subscribedPromise = new Promise((resolve, reject) => {
+          this.wsRedLedger.on('message', (message) => {
+            const parsed = JSON.parse(message)
+            if (parsed.method === 'subscribe_all_accounts' && parsed.params.eventType === '*') {
+              resolve()
+            }
+          })
+        }).then(() => 'subscribe')
+        const firstExecuted = yield Promise.race([connectPromise, subscribedPromise])
+        assert.equal(firstExecuted, 'subscribe', 'must subscribe first')
+      })
+
+      it.skip('should time out if the subscription response takes too long')
     })
 
     describe('notification passing', function () {
@@ -595,7 +715,6 @@ describe('PluginBellsFactory', function () {
 
         yield handled
       })
-
     })
 
     describe('websocket reconnection', function () {

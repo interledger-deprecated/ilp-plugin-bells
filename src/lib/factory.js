@@ -50,12 +50,14 @@ class PluginFactory extends EventEmitter2 {
       this.adminPlugin.on('_rpc:notification', (notif) =>
         co.wrap(this._routeNotification).call(this, notif))
 
-      this.adminPlugin.on('connect', this._subscribeAccounts.bind(this))
+      this.adminPlugin.on('connect', () => {
+        debug('admin plugin connected')
+        this._subscribeAccounts()
+      })
     }
 
     debug('connecting admin plugin')
     yield this.adminPlugin.connect(options)
-    // TODO wait to resolve until we have subscribed to accounts
 
     // store the shared context
     this.ledgerContext = this.adminPlugin.ledgerContext
@@ -136,7 +138,10 @@ class PluginFactory extends EventEmitter2 {
 
     // try to retrieve existing plugin
     const existing = this.plugins.get(username)
-    if (existing) return existing
+    if (existing) {
+      debug('tried to create plugin that already exists, returning existing plugin for user: ' + username)
+      return existing
+    }
 
     // parse endpoint to get URL
     const account = opts.account || this.ledgerContext
