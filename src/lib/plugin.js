@@ -281,6 +281,7 @@ class FiveBellsLedger extends EventEmitter2 {
                 return this._subscribeAccounts([this.account])
                   .catch(reject)
                   .then(() => {
+                    debug('plugin connected to: ' + notificationsUrl)
                     this.emit('connect')
                     this.connected = true
                     return resolve(null)
@@ -328,6 +329,7 @@ class FiveBellsLedger extends EventEmitter2 {
             this.ws = ws
           })
           .on('disconnect', () => {
+            debug('plugin disconnected from: ' + notificationsUrl)
             this.connected = false
             // remove listeners so we don't have duplicate event handlers when the ws reconnects
             this.ws.removeAllListeners()

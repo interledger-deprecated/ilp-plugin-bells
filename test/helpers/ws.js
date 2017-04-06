@@ -60,6 +60,12 @@ exports.makeServer = function (uri) {
         id: rpcMessage.id,
         result: rpcMessage.params.accounts.length
       }))
+    } else if (rpcMessage.method === 'subscribe_all_accounts') {
+      server.send(JSON.stringify({
+        jsonrpc: '2.0',
+        id: rpcMessage.id,
+        result: 1
+      }))
     }
   })
   return server

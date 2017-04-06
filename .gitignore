@@ -2,4 +2,5 @@
 /coverage/
 /integration-test/
 *.log
+*.swp
 
