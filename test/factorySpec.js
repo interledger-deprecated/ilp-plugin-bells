@@ -614,7 +614,7 @@ describe('PluginBellsFactory', function () {
         yield subscribedPromise
       })
 
-      it.skip('should resolve only after subscribing to the accounts', function * () {
+      it('should resolve only after subscribing to the accounts', function * () {
         const connectPromise = this.factory.connect().then(() => 'connect')
         const subscribedPromise = new Promise((resolve, reject) => {
           this.wsRedLedger.on('message', (message) => {
@@ -742,10 +742,13 @@ describe('PluginBellsFactory', function () {
     describe('websocket reconnection', function () {
       it('will resubscribe to all accounts if the websocket connection drops', function * () {
         yield this.factory.connect()
+        this.wsRedLedger.emit('close')
+        yield new Promise(setImmediate)
 
         const subscribedPromise = new Promise((resolve, reject) => {
           this.wsRedLedger.on('message', (message) => {
             const parsed = JSON.parse(message)
+            console.log(parsed)
             if (parsed.method === 'subscribe_all_accounts' && parsed.params.eventType === '*') {
               resolve()
             }

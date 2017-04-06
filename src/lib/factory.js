@@ -38,6 +38,7 @@ class PluginFactory extends EventEmitter2 {
     return co.wrap(this._connect).call(this, options)
   }
   * _connect (options) {
+    let subscribedPromise
     if (!this.adminPlugin) {
       // create the central admin instance
       this.adminPlugin = new Plugin({
@@ -54,10 +55,21 @@ class PluginFactory extends EventEmitter2 {
         debug('admin plugin connected')
         this._subscribeAccounts()
       })
+
+      // on the first connection, don't resolve until
+      // we have subscribed to notifications
+      subscribedPromise = new Promise((resolve, reject) => {
+        this.once('_subscribed', resolve)
+      })
     }
 
     debug('connecting admin plugin')
     yield this.adminPlugin.connect(options)
+
+    if (subscribedPromise) {
+      debug('waiting for notification subscription')
+      yield subscribedPromise
+    }
 
     // store the shared context
     this.ledgerContext = this.adminPlugin.ledgerContext
@@ -181,10 +193,7 @@ class PluginFactory extends EventEmitter2 {
 
     // stop plugin from double-connecting
     plugin.disconnect = function () { return Promise.resolve(null) }
-    plugin.connect = function () {
-      // TODO this should wait until the admin is subscribed to the account notifications
-      return Promise.resolve(null)
-    }
+    plugin.connect = function () { return Promise.resolve(null) }
     plugin.isConnected = () => this.isConnected()
 
     plugin.ledgerContext = this.ledgerContext
@@ -224,14 +233,20 @@ class PluginFactory extends EventEmitter2 {
   }
 
   _subscribeAccounts () {
-    if (this.globalSubscription) {
-      debug('subscribing to all accounts')
-      return this.adminPlugin._subscribeAllAccounts()
-    } else {
-      const accounts = this._pluginAccounts()
-      debug('subscribing to accounts: ' + accounts.join(', '))
-      return this.adminPlugin._subscribeAccounts(accounts)
-    }
+    return Promise.resolve()
+      .then(() => {
+        if (this.globalSubscription) {
+          debug('subscribing to all accounts')
+          return this.adminPlugin._subscribeAllAccounts()
+        } else {
+          const accounts = this._pluginAccounts()
+          debug('subscribing to accounts: ' + accounts.join(', '))
+          return this.adminPlugin._subscribeAccounts(accounts)
+        }
+      })
+      .then(() => {
+        this.emit('_subscribed')
+      })
   }
 
   * _handleGlobalNotification (account, notification) {
