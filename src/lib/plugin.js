@@ -15,8 +15,8 @@ const omitNil = require('lodash/fp/omitBy')(isNil)
 const translate = require('./translate')
 const LedgerContext = require('./ledger-context')
 
-const backoffMin = 100
-const backoffMax = 30000
+const accountBackoffMin = 1000
+const accountBackoffMax = 30000
 const defaultConnectTimeout = 60000
 const wsReconnectDelayMin = 10
 const wsReconnectDelayMax = 500
@@ -217,7 +217,10 @@ class FiveBellsLedger extends EventEmitter2 {
                 return resolve(null)
               } else {
                 return this._subscribeAccounts([this.account])
-                  .catch(reject)
+                  .catch((err) => {
+                    debug('error (re)subscribing to account ' + this.account, err)
+                    return reject(err)
+                  })
                   .then(() => {
                     debug('plugin connected to: ' + wsUri)
                     this.emit('connect')
@@ -731,7 +734,7 @@ function * resolveWebfingerOptions (identifier) {
 }
 
 function * requestRetry (requestOptions, retryOptions) {
-  let delay = backoffMin
+  let delay = retryOptions.backoffMin
   const start = Date.now()
   const timeout = retryOptions.timeout
   while (true) {
@@ -747,7 +750,7 @@ function * requestRetry (requestOptions, retryOptions) {
       }
       return res
     } catch (err) {
-      delay = Math.min(Math.floor(1.5 * delay), backoffMax)
+      delay = Math.min(Math.floor(1.5 * delay), retryOptions.backoffMax)
       if (Date.now() + delay - start > timeout) {
         throw new Error(retryOptions.errorMessage + ': timeout')
       }
