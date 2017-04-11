@@ -7,6 +7,7 @@ chai.should()
 
 const assert = chai.assert
 
+const sinon = require('sinon')
 const mock = require('mock-require')
 const nock = require('nock')
 const wsHelper = require('./helpers/ws')
