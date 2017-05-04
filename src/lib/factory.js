@@ -198,6 +198,7 @@ class PluginFactory extends EventEmitter2 {
 
     plugin.ledgerContext = this.ledgerContext
 
+    plugin.agent = this.adminPlugin.agent
     this.plugins.set(username, plugin)
 
     if (!this.glogbalSubscription) {

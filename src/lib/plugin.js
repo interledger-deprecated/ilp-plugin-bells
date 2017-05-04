@@ -16,6 +16,7 @@ const omitNil = require('lodash/fp/omitBy')(isNil)
 const translate = require('./translate')
 const LedgerContext = require('./ledger-context')
 const util = require('util')
+const spdy = require('spdy')
 
 const accountBackoffMin = 1000
 const accountBackoffMax = 30000
@@ -134,7 +135,8 @@ class FiveBellsLedger extends EventEmitter2 {
     const res = yield this._requestRetry({
       method: 'GET',
       uri: accountUri,
-      json: true
+      json: true,
+      agent: this.agent
     }, {
       errorMessage: 'Unable to connect to account',
       timeout: options.timeout,
@@ -166,6 +168,8 @@ class FiveBellsLedger extends EventEmitter2 {
     const ledgerMetadata = yield this._fetchLedgerMetadata(host)
     this.ledgerContext = new LedgerContext(host, ledgerMetadata)
 
+    this._setupHttp2(this.ledgerContext)
+
     // Set ILP prefix
     const ledgerPrefix = this.ledgerContext.prefix
     if (this.configPrefix) {
@@ -187,6 +191,23 @@ class FiveBellsLedger extends EventEmitter2 {
       timeout: options.timeout,
       uri: notificationsUrl
     })
+  }
+
+  _setupHttp2 (ledgerContext) {
+    const hostURL = parseURL(ledgerContext.host)
+    const matches = /^five-bells@(\d+)$/.exec(ledgerContext.ledgerMetadata.version)
+    if (hostURL.protocol === 'https:' && matches && matches[1] >= 20) {
+      this.agent = spdy.createAgent({
+        host: hostURL.hostname,
+        port: hostURL.port
+      }).once('error', function (err) {
+        debug('Spdy HTTP Handler Error: ', err)
+        this.emit(err)
+      })
+      debug('Using HTTP/2.0')
+    } else {
+      debug('Using HTTP/1.1')
+    }
   }
 
   _connectToWebsocket (options) {
@@ -376,7 +397,8 @@ class FiveBellsLedger extends EventEmitter2 {
       res = yield request(Object.assign({
         method: 'get',
         uri: creds.account,
-        json: true
+        json: true,
+        agent: this.agent
       }, requestCredentials(creds)))
     } catch (e) { }
     if (!res || res.statusCode !== 200) {
@@ -437,7 +459,8 @@ class FiveBellsLedger extends EventEmitter2 {
         method: 'post',
         uri: this.ledgerContext.urls.message,
         body: fiveBellsMessage,
-        json: true
+        json: true,
+        agent: this.agent
       }))
     const body = sendRes.body
     if (sendRes.statusCode >= 400) {
@@ -489,7 +512,8 @@ class FiveBellsLedger extends EventEmitter2 {
           method: 'POST',
           uri: caseUri + '/targets',
           body: [ this.ledgerContext.urls.transfer_fulfillment.replace(':id', transfer.id) ],
-          json: true
+          json: true,
+          agent: this.agent
         })
 
         if (res.statusCode !== 200) {
@@ -505,7 +529,8 @@ class FiveBellsLedger extends EventEmitter2 {
         method: 'put',
         uri: fiveBellsTransfer.id,
         body: fiveBellsTransfer,
-        json: true
+        json: true,
+        agent: this.agent
       }))
     const body = sendRes.body
     if (sendRes.statusCode >= 400) {
@@ -535,7 +560,8 @@ class FiveBellsLedger extends EventEmitter2 {
         body: translate.translateToCryptoFulfillment(conditionFulfillment),
         headers: {
           'content-type': 'text/plain'
-        }
+        },
+        agent: this.agent
       }))
     const body = getResponseJSON(fulfillmentRes)
 
@@ -583,7 +609,8 @@ class FiveBellsLedger extends EventEmitter2 {
         json: true,
         headers: {
           'Accept': '*/*'
-        }
+        },
+        agent: this.agent
       }, requestCredentials(this.credentials)))
     } catch (err) {
       throw new ExternalError('Remote error: message=' + err.message)
@@ -619,7 +646,8 @@ class FiveBellsLedger extends EventEmitter2 {
         method: 'put',
         uri: this.ledgerContext.urls.transfer_rejection.replace(':id', transferId),
         body: rejectionMessage,
-        json: true
+        json: true,
+        agent: this.agent
       }))
     const body = rejectionRes.body
 
@@ -699,7 +727,8 @@ class FiveBellsLedger extends EventEmitter2 {
     const authTokenRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'get',
-        uri: this.ledgerContext.urls.auth_token
+        uri: this.ledgerContext.urls.auth_token,
+        agent: this.agent
       }))
     const body = getResponseJSON(authTokenRes)
     return body && body.token
