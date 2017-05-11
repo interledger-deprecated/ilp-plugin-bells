@@ -420,7 +420,8 @@ describe('Connection methods', function () {
           prefix: 'example.red.',
           connectors: ['example.red.mark'],
           currencyCode: 'USD',
-          currencyScale: 2
+          currencyScale: 2,
+          minBalance: '0'
         })
       })
 

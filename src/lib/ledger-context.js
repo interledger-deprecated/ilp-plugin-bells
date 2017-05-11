@@ -49,6 +49,7 @@ class LedgerContext {
       prefix: this.prefix,
       connectors: ledgerMetadata.connectors.map((c) => this.prefix + c.name),
       currencyCode: ledgerMetadata.currency_code,
+      minBalance: '0',
       currencyScale: ledgerMetadata.scale // this is the name for it in the fivebells API, for legacy reasons
     }
   }
