@@ -41,7 +41,7 @@
     "istanbul": "^0.4.3",
     "mocha": "^3.2.0",
     "mock-require": "^2.0.1",
-    "mock-socket": "^6.0.4",
+    "mock-socket": "~6.0.4",
     "nock": "^9.0.2",
     "sinon": "^1.17.4",
     "validate-commit-msg": "^2.6.1"
