@@ -349,6 +349,31 @@ describe('PluginBellsFactory', function () {
         yield handled
       })
 
+      it('will pass a notification to the correct plugin when transfer.debit.account=credit.account', function * () {
+        let messages = 0
+        const handled = new Promise((resolve, reject) => {
+          this.plugin.on('incoming_transfer', () => {
+            messages++
+            resolve()
+          })
+        })
+
+        this.fiveBellsTransferMike.debits[0].account = 'http://red.example/accounts/mike'
+        this.wsRedLedger.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: null,
+          method: 'notify',
+          params: {
+            event: 'transfer.update',
+            resource: this.fiveBellsTransferMike,
+            related_resources: {}
+          }
+        }))
+
+        yield handled
+        assert.equal(messages, 1)
+      })
+
       it('will pass a message to the correct plugin', function * () {
         const handled = new Promise((resolve, reject) => {
           this.plugin.on('incoming_message', resolve)
@@ -372,6 +397,36 @@ describe('PluginBellsFactory', function () {
         }))
 
         yield handled
+      })
+
+      it('will pass a message to the correct plugin when message.from=to', function * () {
+        let messages = 0
+        const handled = new Promise((resolve, reject) => {
+          this.plugin.on('incoming_message', () => {
+            messages++
+            resolve()
+          })
+        })
+
+        this.wsRedLedger.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: null,
+          method: 'notify',
+          params: {
+            event: 'message.send',
+            resource: {
+              id: '6a13abf0-2333-4d1e-9afc-5bf32c6dc0dd',
+              ledger: 'http://red.example',
+              to: 'http://red.example/accounts/mike',
+              from: 'http://red.example/accounts/mike',
+              custom: {}
+            },
+            related_resources: {}
+          }
+        }))
+
+        yield handled
+        assert.equal(messages, 1)
       })
 
       it('send a message as the correct username', function * () {
