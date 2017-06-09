@@ -25,6 +25,7 @@ const defaultConnectTimeout = 60000
 const wsReconnectDelayMin = 10
 const wsReconnectDelayMax = 500
 const defaultMessageTimeout = 5000
+const authTokenMaxAge = 7 * 24 * 60 * 60 * 1000 // one week
 
 class FiveBellsLedger extends EventEmitter2 {
   constructor (options) {
@@ -64,7 +65,8 @@ class FiveBellsLedger extends EventEmitter2 {
       key: options.key,
       ca: options.ca
     }
-    this.authToken = options.authToken || null
+    this.authToken = null
+    this.authTokenDate = null
     this.connector = options.connector || null
 
     this.debugReplyNotifications = options.debugReplyNotifications || false
@@ -120,7 +122,6 @@ class FiveBellsLedger extends EventEmitter2 {
       })
     }
     this.connecting = true
-    this.authToken = null
 
     if (this.identifier) {
       const newOptions = yield resolveWebfingerOptions(this.identifier)
@@ -189,9 +190,8 @@ class FiveBellsLedger extends EventEmitter2 {
     }
     this.ready = true
 
-    this.authToken = yield this._getAuthToken()
-    if (!this.authToken) throw new Error('Unable to get auth token from ledger')
     yield this._connectToWebsocket({
+      authToken: yield this._getAuthToken(),
       timeout: options.timeout,
       uri: this.ledgerContext.urls.websocket
     })
@@ -211,7 +211,7 @@ class FiveBellsLedger extends EventEmitter2 {
     const reconnect = reconnectCore(() => {
       return new WebSocket(wsUri, null, {
         headers: {
-          authorization: 'Bearer ' + this.authToken
+          authorization: 'Bearer ' + options.authToken
         }
       })
     })
@@ -385,11 +385,11 @@ class FiveBellsLedger extends EventEmitter2 {
     const creds = this.credentials
     let res
     try {
-      res = yield request(Object.assign({
+      res = yield this._requestWithCredentials({
         method: 'get',
         uri: creds.account,
         json: true
-      }, requestCredentials(creds, this.authToken)))
+      })
     } catch (e) { }
     if (!res || res.statusCode !== 200) {
       throw new ExternalError('Unable to determine current balance')
@@ -519,13 +519,12 @@ class FiveBellsLedger extends EventEmitter2 {
     debug('converted to ledger message: ' + JSON.stringify(fiveBellsMessage))
 
     return co(function * () {
-      const sendRes = yield request(Object.assign(
-        requestCredentials(this.credentials, this.authToken), {
-          method: 'post',
-          uri: this.ledgerContext.urls.message,
-          body: fiveBellsMessage,
-          json: true
-        }))
+      const sendRes = yield this._requestWithCredentials({
+        method: 'post',
+        uri: this.ledgerContext.urls.message,
+        body: fiveBellsMessage,
+        json: true
+      })
       const body = sendRes.body
       if (sendRes.statusCode < 400) return
       debug('error submitting message:', sendRes.statusCode, JSON.stringify(sendRes.body))
@@ -590,13 +589,12 @@ class FiveBellsLedger extends EventEmitter2 {
 
     debug('submitting transfer: ', JSON.stringify(fiveBellsTransfer))
 
-    const sendRes = yield request(Object.assign(
-      requestCredentials(this.credentials, this.authToken), {
-        method: 'put',
-        uri: fiveBellsTransfer.id,
-        body: fiveBellsTransfer,
-        json: true
-      }))
+    const sendRes = yield this._requestWithCredentials({
+      method: 'put',
+      uri: fiveBellsTransfer.id,
+      body: fiveBellsTransfer,
+      json: true
+    })
     const body = sendRes.body
     if (sendRes.statusCode >= 400) {
       debug('error submitting transfer:', sendRes.statusCode, JSON.stringify(body))
@@ -618,15 +616,14 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.ready) {
       throw new Error('Must be connected before fulfillCondition can be called')
     }
-    const fulfillmentRes = yield request(Object.assign(
-      requestCredentials(this.credentials, this.authToken), {
-        method: 'put',
-        uri: this.ledgerContext.urls.transfer_fulfillment.replace(':id', transferId),
-        body: translate.translateToCryptoFulfillment(conditionFulfillment),
-        headers: {
-          'content-type': 'text/plain'
-        }
-      }))
+    const fulfillmentRes = yield this._requestWithCredentials({
+      method: 'put',
+      uri: this.ledgerContext.urls.transfer_fulfillment.replace(':id', transferId),
+      body: translate.translateToCryptoFulfillment(conditionFulfillment),
+      headers: {
+        'content-type': 'text/plain'
+      }
+    })
     const body = getResponseJSON(fulfillmentRes)
 
     if (fulfillmentRes.statusCode >= 400 && body) {
@@ -667,14 +664,14 @@ class FiveBellsLedger extends EventEmitter2 {
     debug('get fulfillment: ' + fulfillmentUri)
     let res
     try {
-      res = yield request(Object.assign({
+      res = yield this._requestWithCredentials({
         method: 'get',
         uri: fulfillmentUri,
         json: true,
         headers: {
           'Accept': '*/*'
         }
-      }, requestCredentials(this.credentials, this.authToken)))
+      })
     } catch (err) {
       throw new ExternalError('Remote error: message=' + err.message)
     }
@@ -704,13 +701,12 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.ready) {
       throw new Error('Must be connected before rejectIncomingTransfer can be called')
     }
-    const rejectionRes = yield request(Object.assign(
-      requestCredentials(this.credentials, this.authToken), {
-        method: 'put',
-        uri: this.ledgerContext.urls.transfer_rejection.replace(':id', transferId),
-        body: rejectionMessage,
-        json: true
-      }))
+    const rejectionRes = yield this._requestWithCredentials({
+      method: 'put',
+      uri: this.ledgerContext.urls.transfer_rejection.replace(':id', transferId),
+      body: rejectionMessage,
+      json: true
+    })
     const body = rejectionRes.body
 
     if (rejectionRes.statusCode >= 400) {
@@ -786,19 +782,34 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _getAuthToken () {
+    // Check for a valid auth token before requesting one.
+    const authTokenAge = Date.now() - this.authTokenDate
+    if (this.authToken && authTokenAge < authTokenMaxAge) {
+      return this.authToken
+    }
     const authTokenRes = yield request(Object.assign(
       requestCredentials(this.credentials), {
         method: 'get',
         uri: this.ledgerContext.urls.auth_token
       }))
     const body = getResponseJSON(authTokenRes)
-    return body && body.token
+    this.authToken = body && body.token
+    if (!this.authToken) throw new Error('Unable to get auth token from ledger')
+    this.authTokenDate = Date.now()
+    return this.authToken
   }
 
   _requestRetry (requestOptions, retryOptions) {
     return requestRetry(Object.assign({
       credentials: this.credentials
     }, requestOptions), retryOptions)
+  }
+
+  * _requestWithCredentials (options) {
+    const authToken = yield this._getAuthToken()
+    return yield request(Object.assign(
+      requestCredentials(this.credentials, authToken),
+      options))
   }
 }
 
