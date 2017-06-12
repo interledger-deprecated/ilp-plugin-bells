@@ -1,6 +1,7 @@
 'use strict'
 
 const co = require('co')
+const uniq = require('lodash/uniq')
 const Plugin = require('./plugin')
 const debug = require('debug')('ilp-plugin-bells:factory')
 const UnreachableError = require('../errors/unreachable-error')
@@ -95,7 +96,7 @@ class PluginFactory extends EventEmitter2 {
 
     // for every account in the notification, call that plugin's notification
     // handler
-    for (let account of accounts) {
+    for (let account of uniq(accounts)) {
       // emit event for global listeners
       if (this.globalSubscription) {
         co.wrap(this._handleGlobalNotification).call(this, account, notification)
