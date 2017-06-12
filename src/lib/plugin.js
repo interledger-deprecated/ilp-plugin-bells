@@ -25,7 +25,7 @@ const defaultConnectTimeout = 60000
 const wsReconnectDelayMin = 10
 const wsReconnectDelayMax = 500
 const defaultMessageTimeout = 5000
-const authTokenMaxAge = 7 * 24 * 60 * 60 * 1000 // one week
+const defaultAuthTokenMaxAge = 7 * 24 * 60 * 60 * 1000 // one week
 
 class FiveBellsLedger extends EventEmitter2 {
   constructor (options) {
@@ -67,6 +67,7 @@ class FiveBellsLedger extends EventEmitter2 {
     }
     this.authToken = null
     this.authTokenDate = null
+    this.authTokenMaxAge = defaultAuthTokenMaxAge
     this.connector = options.connector || null
 
     this.debugReplyNotifications = options.debugReplyNotifications || false
@@ -784,7 +785,7 @@ class FiveBellsLedger extends EventEmitter2 {
   * _getAuthToken () {
     // Check for a valid auth token before requesting one.
     const authTokenAge = Date.now() - this.authTokenDate
-    if (this.authToken && authTokenAge < authTokenMaxAge) {
+    if (this.authToken && authTokenAge < this.authTokenMaxAge) {
       return this.authToken
     }
     const authTokenRes = yield request(Object.assign(
@@ -796,6 +797,7 @@ class FiveBellsLedger extends EventEmitter2 {
     this.authToken = body && body.token
     if (!this.authToken) throw new Error('Unable to get auth token from ledger')
     this.authTokenDate = Date.now()
+    this.authTokenMaxAge = (body && body.token_max_age) || this.authTokenMaxAge
     return this.authToken
   }
 
