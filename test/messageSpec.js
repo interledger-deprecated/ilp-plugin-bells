@@ -34,12 +34,14 @@ describe('Messaging', function () {
       }
     })
 
-    this.nockAccount = nock('http://red.example')
+    nock('http://red.example')
       .get('/accounts/mike')
       .reply(200, {
         ledger: 'http://red.example',
         name: 'mike'
       })
+      .get('/transfers/1')
+      .reply(403)
 
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
     this.ledgerMessage = cloneDeep(require('./data/message.json'))
@@ -59,7 +61,7 @@ describe('Messaging', function () {
       .get('/')
       .reply(200, this.infoRedLedger)
 
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
 
     yield this.plugin.connect()
     this.clock = sinon.useFakeTimers(START_DATE, 'Date')
@@ -68,7 +70,8 @@ describe('Messaging', function () {
   afterEach(function * () {
     this.clock.restore()
     this.wsRedLedger.stop()
-    assert(nock.isDone(), 'nocks should all have been called')
+    assert(nock.isDone(), 'nocks should all have been called. Pending mocks are: ' +
+      nock.pendingMocks())
   })
 
   describe('sendRequest', function () {
@@ -112,6 +115,9 @@ describe('Messaging', function () {
           ledger: 'http://red.example',
           name: 'mike'
         })
+        .get('/transfers/1')
+        .reply(403)
+
       const nockInfo = nock('http://red.example')
         .get('/')
         .reply(200, _.merge(this.infoRedLedger, {

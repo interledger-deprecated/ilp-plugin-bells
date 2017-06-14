@@ -35,12 +35,14 @@ describe('Transfer methods', function () {
       .get('/auth_token')
       .reply(200, {token: 'abc'})
 
-    this.nockAccount = nock('http://red.example')
+    nock('http://red.example')
       .get('/accounts/mike')
       .reply(200, {
         ledger: 'http://red.example',
         name: 'mike'
       })
+      .get('/transfers/1')
+      .reply(403)
 
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
     this.ledgerTransfer = cloneDeep(require('./data/transfer.json'))
@@ -55,7 +57,7 @@ describe('Transfer methods', function () {
       .get('/')
       .reply(200, this.infoRedLedger)
 
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
 
     yield this.plugin.connect()
   })
@@ -97,6 +99,8 @@ describe('Transfer methods', function () {
           ledger: 'http://red.example',
           name: 'mike'
         })
+        .get('/other/place/to/submit/transfers/1')
+        .reply(403)
       const nockInfo = nock('http://red.example')
         .get('/')
         .reply(200, _.merge(this.infoRedLedger, {
@@ -388,6 +392,8 @@ describe('Transfer methods', function () {
           ledger: 'http://red.example',
           name: 'mike'
         })
+        .get('/transfers/1')
+        .reply(403)
       const nockInfo = nock('http://red.example')
         .get('/')
         .reply(200, _.merge(this.infoRedLedger, {

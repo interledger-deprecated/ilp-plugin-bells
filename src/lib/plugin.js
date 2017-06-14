@@ -65,6 +65,7 @@ class FiveBellsLedger extends EventEmitter2 {
       key: options.key,
       ca: options.ca
     }
+    this.supportedAuth = options.supportedAuth || null
     this.authToken = null
     this.authTokenDate = null
     this.authTokenMaxAge = defaultAuthTokenMaxAge
@@ -189,12 +190,19 @@ class FiveBellsLedger extends EventEmitter2 {
     if (!this.ledgerContext.prefix) {
       throw new Error('Unable to set prefix from ledger or from local config')
     }
+
+    // figure out which auth mechanism the ledger supports
+    if (!this.supportedAuth) {
+      this.supportedAuth = yield this._getAuthMechanisms()
+    }
+
     this.ready = true
 
+    const notificationsUrl = this.ledgerContext.urls.websocket + '?token=' +
+                                encodeURIComponent(yield this._getAuthToken())
     yield this._connectToWebsocket({
-      authToken: yield this._getAuthToken(),
       timeout: options.timeout,
-      uri: this.ledgerContext.urls.websocket
+      uri: notificationsUrl
     })
   }
 
@@ -210,11 +218,7 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     const reconnect = reconnectCore(() => {
-      return new WebSocket(wsUri, null, {
-        headers: {
-          authorization: 'Bearer ' + options.authToken
-        }
-      })
+      return new WebSocket(wsUri)
     })
 
     // reject if the timeout occurs before the websocket is successfully established
@@ -391,7 +395,9 @@ class FiveBellsLedger extends EventEmitter2 {
         uri: creds.account,
         json: true
       })
-    } catch (e) { }
+    } catch (e) {
+      debug(`Error getting the balance for account ${creds.account}: `, e)
+    }
     if (!res || res.statusCode !== 200) {
       throw new ExternalError('Unable to determine current balance')
     }
@@ -808,21 +814,43 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   * _requestWithCredentials (options) {
-    const authToken = yield this._getAuthToken()
-    return yield request(Object.assign(
-      requestCredentials(this.credentials, authToken),
-      options))
+    let requestCreds = null
+    if (this.supportedAuth === 'token') {
+      requestCreds = requestCredentials(this.credentials, yield this._getAuthToken())
+    } else if ((this.supportedAuth === 'basic')) {
+      requestCreds = requestCredentials(this.credentials)
+    }
+
+    return yield request(Object.assign(requestCreds, options))
+  }
+
+  * _getAuthMechanisms () {
+    let tryAuth = function * (options) {
+      let resp = yield request.get(this.ledgerContext.urls.transfer.replace(':id', 1), options)
+      return +resp.statusCode
+    }.bind(this)
+
+    if ((yield tryAuth({auth: {bearer: 'invalidToken'}})) === 403) {
+      debug('Using Token Authentication')
+      return 'token'
+    } else if ((yield tryAuth({auth: {user: '@#', pass: '@#'}})) === 403) {
+      debug('Using Basic Authentication')
+      return 'basic'
+    } else {
+      throw new Error('Could not determine supported authentication mechanism.')
+    }
   }
 }
 
 function requestCredentials (credentials, token) {
   return omitNil({
-    auth: Object.assign({
+    // Prefer bearer token for auth. If no token is provided, use user/pass.
+    auth: token ? {
       bearer: token
-    }, credentials.username && credentials.password && {
+    } : credentials.username && credentials.password && {
       user: credentials.username,
       pass: credentials.password
-    }),
+    },
     cert: credentials.cert,
     key: credentials.key,
     ca: credentials.ca

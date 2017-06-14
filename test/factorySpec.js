@@ -18,7 +18,7 @@ const PluginBellsFactory = require('..').Factory
 describe('PluginBellsFactory', function () {
   describe('without global subscription', function () {
     beforeEach(function * () {
-      this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+      this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
       this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
       nock('http://red.example')
@@ -37,6 +37,10 @@ describe('PluginBellsFactory', function () {
       nock('http://red.example')
         .get('/auth_token')
         .reply(200, {token: 'abc'})
+
+      nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
 
       this.transfer = {
         current: {
@@ -266,9 +270,7 @@ describe('PluginBellsFactory', function () {
       })
 
       it('works for ledgers that contain a port in the URL', function * () {
-        nock.cleanAll()
-
-        this.wsRedLedger = wsHelper.makeServer('ws://red.example:3000/websocket')
+        this.wsRedLedger = wsHelper.makeServer('ws://red.example:3000/websocket?token=abc')
         this.infoRedLedger = JSON.parse(JSON.stringify(this.infoRedLedger).replace(/red\.example/g, 'red.example:3000'))
 
         nock('http://red.example:3000')
@@ -277,6 +279,8 @@ describe('PluginBellsFactory', function () {
             ledger: 'http://red.example:3000',
             name: 'admin'
           })
+          .get('/transfers/1')
+          .reply(403)
           .get('/')
           .reply(200, this.infoRedLedger)
           .get('/auth_token')
@@ -544,7 +548,7 @@ describe('PluginBellsFactory', function () {
 
   describe('with global subscription', function () {
     beforeEach(function * () {
-      this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+      this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
       this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
       nock('http://red.example')
@@ -553,6 +557,10 @@ describe('PluginBellsFactory', function () {
           ledger: 'http://red.example',
           name: 'admin'
         })
+
+      nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
 
       const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
