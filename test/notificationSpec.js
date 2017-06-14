@@ -29,7 +29,7 @@ describe('Notification handling', function () {
       }
     })
 
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
     const nockAccount = nock('http://red.example')

@@ -46,7 +46,7 @@ describe('Info methods', function () {
       .get('/')
       .reply(200, infoRedLedger)
 
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
 
     yield this.plugin.connect()
   })

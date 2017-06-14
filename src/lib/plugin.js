@@ -191,10 +191,11 @@ class FiveBellsLedger extends EventEmitter2 {
     }
     this.ready = true
 
+    const notificationsUrl = this.ledgerContext.urls.websocket + '?token=' +
+                                encodeURIComponent(yield this._getAuthToken())
     yield this._connectToWebsocket({
-      authToken: yield this._getAuthToken(),
       timeout: options.timeout,
-      uri: this.ledgerContext.urls.websocket
+      uri: notificationsUrl
     })
   }
 
@@ -210,11 +211,7 @@ class FiveBellsLedger extends EventEmitter2 {
     }
 
     const reconnect = reconnectCore(() => {
-      return new WebSocket(wsUri, null, {
-        headers: {
-          authorization: 'Bearer ' + options.authToken
-        }
-      })
+      return new WebSocket(wsUri)
     })
 
     // reject if the timeout occurs before the websocket is successfully established

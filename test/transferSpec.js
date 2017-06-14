@@ -55,7 +55,7 @@ describe('Transfer methods', function () {
       .get('/')
       .reply(200, this.infoRedLedger)
 
-    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket')
+    this.wsRedLedger = wsHelper.makeServer('ws://red.example/websocket?token=abc')
 
     yield this.plugin.connect()
   })
