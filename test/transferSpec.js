@@ -35,12 +35,14 @@ describe('Transfer methods', function () {
       .get('/auth_token')
       .reply(200, {token: 'abc'})
 
-    this.nockAccount = nock('http://red.example')
+    nock('http://red.example')
       .get('/accounts/mike')
       .reply(200, {
         ledger: 'http://red.example',
         name: 'mike'
       })
+      .get('/transfers/1')
+      .reply(403)
 
     this.infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
     this.ledgerTransfer = cloneDeep(require('./data/transfer.json'))
@@ -69,7 +71,7 @@ describe('Transfer methods', function () {
     it('submits a transfer', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', this.ledgerTransfer)
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200)
       yield assert.isFulfilled(this.plugin.sendTransfer(this.transfer), null)
     })
@@ -77,7 +79,7 @@ describe('Transfer methods', function () {
     it('submits a transfer with "account" instead of "to"', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', this.ledgerTransfer)
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200)
 
       this.transfer.account = this.transfer.to
@@ -97,6 +99,8 @@ describe('Transfer methods', function () {
           ledger: 'http://red.example',
           name: 'mike'
         })
+        .get('/other/place/to/submit/transfers/1')
+        .reply(403)
       const nockInfo = nock('http://red.example')
         .get('/')
         .reply(200, _.merge(this.infoRedLedger, {
@@ -106,6 +110,7 @@ describe('Transfer methods', function () {
         }))
       const transferNock = nock('http://red.example')
         .put('/other/place/to/submit/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200)
       const plugin = new PluginBells({
         prefix: 'example.red.',
@@ -118,9 +123,7 @@ describe('Transfer methods', function () {
         }
       })
       yield plugin.connect()
-
       yield plugin.sendTransfer(this.transfer)
-
       nockInfo.done()
       transferNock.done()
     })
@@ -130,7 +133,7 @@ describe('Transfer methods', function () {
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', (transfer) => {
           return !transfer.hasOwnProperty('execution_condition') && !transfer.hasOwnProperty('cancellation_condition')
         })
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200)
       yield assert.isFulfilled(this.plugin.sendTransfer(_.assign(this.transfer, {
         executionCondition: null,
@@ -194,7 +197,7 @@ describe('Transfer methods', function () {
     it('throws an InvalidFieldsError on InvalidBodyError', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(400, {id: 'InvalidBodyError', message: 'fail'})
 
       return this.plugin.sendTransfer({
@@ -207,7 +210,7 @@ describe('Transfer methods', function () {
     it('throws a DuplicateIdError on InvalidModificationError', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(400, {id: 'InvalidModificationError', message: 'fail'})
 
       return this.plugin.sendTransfer({
@@ -232,7 +235,7 @@ describe('Transfer methods', function () {
             amount: '123'
           }]
         })
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(400, {id: 'SomeError', message: 'fail'})
 
       this.plugin.sendTransfer({
@@ -261,7 +264,7 @@ describe('Transfer methods', function () {
           }],
           additional_info: {cases: ['http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086']}
         })
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200)
 
       yield this.plugin.sendTransfer({
@@ -304,7 +307,7 @@ describe('Transfer methods', function () {
     it('throws InvalidFieldsError on InvalidBodyError', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(422, {id: 'InvalidBodyError', message: 'fail'})
       return this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok')
         .should.be.rejectedWith(errors.InvalidFieldsError, 'fail')
@@ -313,7 +316,7 @@ describe('Transfer methods', function () {
     it('throws NotAcceptedError on UnmetConditionError', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(422, {id: 'UnmetConditionError', message: 'fail'})
       return this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok')
         .should.be.rejectedWith(errors.NotAcceptedError, 'fail')
@@ -322,7 +325,7 @@ describe('Transfer methods', function () {
     it('throws TransferNotConditionalError', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(422, {id: 'TransferNotConditionalError', message: 'fail'})
       return this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok')
         .should.be.rejectedWith(errors.TransferNotConditionalError, 'fail')
@@ -331,7 +334,7 @@ describe('Transfer methods', function () {
     it('throws TransferNotFoundError on NotFoundError', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(404, {id: 'NotFoundError', message: 'fail'})
       return this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok')
         .should.be.rejectedWith(errors.TransferNotFoundError, 'fail')
@@ -345,7 +348,7 @@ describe('Transfer methods', function () {
     it('throws AlreadyRolledBackError when fulfilling a rejected transfer', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(404, {
           id: 'InvalidModificationError',
           message: 'Transfers in state rejected may not be executed'
@@ -357,7 +360,7 @@ describe('Transfer methods', function () {
     it('puts the fulfillment', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(201)
       yield assert.isFulfilled(this.plugin.fulfillCondition(
         '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -371,6 +374,7 @@ describe('Transfer methods', function () {
         }
       })
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
+        .matchHeader('authorization', 'Bearer abc')
         .reply(201)
       yield assert.isFulfilled(this.plugin.fulfillCondition(
         '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
@@ -388,6 +392,8 @@ describe('Transfer methods', function () {
           ledger: 'http://red.example',
           name: 'mike'
         })
+        .get('/transfers/1')
+        .reply(403)
       const nockInfo = nock('http://red.example')
         .get('/')
         .reply(200, _.merge(this.infoRedLedger, {
@@ -397,6 +403,7 @@ describe('Transfer methods', function () {
         }))
       const fulfillmentNock = nock('http://red.example')
         .put('/other/place/to/submit/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200)
       const plugin = new PluginBells({
         prefix: 'example.red.',
@@ -421,7 +428,7 @@ describe('Transfer methods', function () {
     it('throws an ExternalError on 500', function () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment', 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(500)
       return assert.isRejected(this.plugin.fulfillCondition('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', 'HS8e5Ew02XKAglyus2dh2Ohabuqmy3HDM8EXMLz22ok'), ExternalError, /Failed to submit fulfillment for transfer: 6851929f-5a91-4d02-b9f4-4ae6b7f1768c Error: undefined/)
     })
@@ -444,7 +451,7 @@ describe('Transfer methods', function () {
           'Accept': '*/*'
         }})
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200, 'oCKAIB0vHuRMNNlygIJcrrNnYdjoWm7qpstxwzPBFzC89tqJ')
       assert.equal(
         yield this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'),
@@ -454,7 +461,7 @@ describe('Transfer methods', function () {
     it('throws TransferNotFoundError', function * () {
       nock('http://red.example')
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(404, {
           id: 'TransferNotFoundError',
           message: 'This transfer does not exist'
@@ -465,7 +472,7 @@ describe('Transfer methods', function () {
     it('throws MissingFulfillmentError', function * () {
       nock('http://red.example')
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(404, {
           id: 'MissingFulfillmentError',
           message: 'This transfer has no fulfillment'
@@ -476,7 +483,7 @@ describe('Transfer methods', function () {
     it('throws MissingFulfillmentError on 404 NotFoundError', function * () {
       nock('http://red.example')
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(404, {
           id: 'NotFoundError',
           message: 'This transfer has no fulfillment'
@@ -487,7 +494,7 @@ describe('Transfer methods', function () {
     it('throws an ExternalError on 500', function * () {
       nock('http://red.example')
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(500)
       return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), ExternalError, /Remote error: status=500/)
     })
@@ -495,7 +502,7 @@ describe('Transfer methods', function () {
     it('throws an ExternalError on error', function * () {
       nock('http://red.example')
         .get('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .replyWithError('broken')
       return assert.isRejected(this.plugin.getFulfillment('6851929f-5a91-4d02-b9f4-4ae6b7f1768c'), ExternalError, /Remote error: message=broken/)
     })
@@ -525,6 +532,7 @@ describe('Transfer methods', function () {
           'Content-Type': 'application/json'
         }
       }).put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200, {whatever: true})
       yield assert.isFulfilled(
         this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage),
@@ -535,6 +543,7 @@ describe('Transfer methods', function () {
     it('throws NotAcceptedError on UnauthorizedError', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
+        .matchHeader('authorization', 'Bearer abc')
         .reply(422, {id: 'UnauthorizedError', message: 'error'})
       return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), errors.NotAcceptedError, /error/)
     })
@@ -542,6 +551,7 @@ describe('Transfer methods', function () {
     it('throws TransferNotFoundError on NotFoundError', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
+        .matchHeader('authorization', 'Bearer abc')
         .reply(404, {id: 'NotFoundError', message: 'error'})
       return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), errors.TransferNotFoundError, /error/)
     })
@@ -549,6 +559,7 @@ describe('Transfer methods', function () {
     it('throws AlreadyFulfilledError on InvalidModificationError', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
+        .matchHeader('authorization', 'Bearer abc')
         .reply(404, {id: 'InvalidModificationError', message: 'error'})
       return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), errors.AlreadyFulfilledError, /error/)
     })
@@ -556,6 +567,7 @@ describe('Transfer methods', function () {
     it('throws ExternalError on 500', function * () {
       nock('http://red.example')
         .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/rejection', rejectionMessage)
+        .matchHeader('authorization', 'Bearer abc')
         .reply(500)
       return assert.isRejected(this.plugin.rejectIncomingTransfer('6851929f-5a91-4d02-b9f4-4ae6b7f1768c', rejectionMessage), ExternalError, /Remote error: status=500/)
     })

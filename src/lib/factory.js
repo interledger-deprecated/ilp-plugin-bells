@@ -5,7 +5,6 @@ const uniq = require('lodash/uniq')
 const Plugin = require('./plugin')
 const debug = require('debug')('ilp-plugin-bells:factory')
 const UnreachableError = require('../errors/unreachable-error')
-const request = require('co-request')
 const EventEmitter2 = require('eventemitter2').EventEmitter2
 const translateBellsToPluginApi = require('./translate').translateBellsToPluginApi
 
@@ -74,6 +73,7 @@ class PluginFactory extends EventEmitter2 {
 
     // store the shared context
     this.ledgerContext = this.adminPlugin.ledgerContext
+    this.supportedAuth = this.adminPlugin.supportedAuth
 
     this.ready = true
   }
@@ -160,11 +160,9 @@ class PluginFactory extends EventEmitter2 {
       .replace('/:name', '/' + username)
 
     // make sure that the account exists
-    const exists = yield request(account, {
-      auth: {
-        username: this.adminUsername,
-        password: this.adminPassword
-      }
+    const exists = yield this.adminPlugin._requestWithCredentials({
+      uri: account,
+      method: 'GET'
     })
 
     if (exists.statusCode !== 200) {
@@ -183,7 +181,8 @@ class PluginFactory extends EventEmitter2 {
         username: this.adminUsername,
         password: this.adminPassword,
         account: this.adminAccount
-      }
+      },
+      supportedAuth: this.supportedAuth
     })
 
     // 'connects' the plugin without really connecting it
@@ -194,11 +193,13 @@ class PluginFactory extends EventEmitter2 {
     plugin.connect = function () { return Promise.resolve(null) }
     plugin.isConnected = () => this.isConnected()
 
+    plugin._getAuthToken = () => this.adminPlugin._getAuthToken()
+
     plugin.ledgerContext = this.ledgerContext
 
     this.plugins.set(username, plugin)
 
-    if (!this.glogbalSubscription) {
+    if (!this.globalSubscription) {
       yield this._subscribeAccounts()
     }
 

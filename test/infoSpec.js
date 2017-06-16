@@ -37,6 +37,10 @@ describe('Info methods', function () {
       })
 
     nock('http://red.example')
+      .get('/transfers/1')
+      .reply(403)
+
+    nock('http://red.example')
       .get('/auth_token')
       .reply(200, {token: 'abc'})
 
@@ -52,7 +56,8 @@ describe('Info methods', function () {
   })
 
   afterEach(function * () {
-    assert(nock.isDone(), 'all nocks should be called')
+    assert(nock.isDone(), 'nocks should all have been called. Pending mocks are: ' +
+      nock.pendingMocks())
     this.wsRedLedger.stop()
   })
 
@@ -123,6 +128,8 @@ describe('Info methods', function () {
       nock('http://red.example')
         .get('/auth_token')
         .reply(200, {token: 'abc'})
+        .get('/transfers/1')
+        .reply(403)
 
       const infoRedLedger = Object.assign(
         cloneDeep(require('./data/infoRedLedger.json')),
@@ -158,6 +165,8 @@ describe('Info methods', function () {
       nock('http://red.example')
         .get('/auth_token')
         .reply(200, {token: 'abc'})
+        .get('/transfers/1')
+        .reply(403)
 
       const infoRedLedger = Object.assign(
         cloneDeep(require('./data/infoRedLedger.json')),
@@ -174,7 +183,7 @@ describe('Info methods', function () {
           name: 'mike'
         })
 
-      this.wsRedLedger = wsHelper.makeServer('ws://blue.example/websocket?token=abc')
+      this.wsRedLedger = wsHelper.makeServer('ws://blue.example/websocket')
 
       yield plugin.connect()
       assert.equal(plugin.getInfo().prefix, 'example.blue.')
@@ -203,7 +212,7 @@ describe('Info methods', function () {
     it('returns the current balance', function * () {
       nock('http://red.example')
         .get('/accounts/mike')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(200, {balance: '100.01'})
       yield assert.isFulfilled(this.plugin.getBalance(), '10001')
     })
@@ -211,7 +220,7 @@ describe('Info methods', function () {
     it('throws an ExternalError on 500', function () {
       nock('http://red.example')
         .get('/accounts/mike')
-        .basicAuth({user: 'mike', pass: 'mike'})
+        .matchHeader('authorization', 'Bearer abc')
         .reply(500)
       return assert.isRejected(this.plugin.getBalance(), /Unable to determine current balance/)
     })
@@ -223,6 +232,46 @@ describe('Info methods', function () {
         password: 'mike'
       })
       return assert.isRejected(plugin.getBalance(), /Must be connected before getBalance can be called/)
+    })
+
+    it('it falls back to basic auth if bearer token is not supported', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+        .get('/transfers/1')
+        .matchHeader('authorization', 'Bearer invalidToken')
+        .reply(401)
+        .get('/transfers/1')
+        .basicAuth({user: '@#', pass: '@#'})
+        .reply(403)
+        .get('/accounts/mike')
+        .basicAuth({user: 'mike', pass: 'mike'})
+        .reply(200, {balance: '100.01'})
+
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
+      nock('http://red.example')
+        .get('/')
+        .reply(200, infoRedLedger)
+
+      const plugin = new PluginBells({
+        prefix: 'example.red.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike',
+        debugReplyNotifications: true,
+        debugAutofund: {
+          connector: 'http://mark.example',
+          admin: {username: 'adminuser', password: 'adminpass'}
+        }
+      })
+      yield plugin.connect()
+      yield assert.isFulfilled(plugin.getBalance(), '10001')
     })
   })
 })

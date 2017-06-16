@@ -35,10 +35,17 @@ describe('Connection methods', function () {
   afterEach(function * () {
     yield this.plugin.disconnect()
     this.wsRedLedger.stop()
-    assert(nock.isDone(), 'nock should be called')
+    assert(nock.isDone(), 'nocks should all have been called. Pending mocks are: ' +
+      nock.pendingMocks())
   })
 
   describe('connect', function () {
+    beforeEach(function * () {
+      this.transferNock = nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
+    })
+
     it('connects', function * () {
       nock('http://red.example')
         .get('/accounts/mike')
@@ -46,6 +53,7 @@ describe('Connection methods', function () {
           ledger: 'http://red.example',
           name: 'mike'
         })
+
       nock('http://red.example')
         .get('/')
         .reply(200, this.infoRedLedger)
@@ -183,6 +191,7 @@ describe('Connection methods', function () {
     })
 
     it('doesn\'t connect when the "account" is invalid', function (done) {
+      nock.removeInterceptor(this.transferNock.interceptors[0])
       const plugin = new PluginBells({
         prefix: 'example.red.',
         account: 'foo',
@@ -207,6 +216,7 @@ describe('Connection methods', function () {
     })
 
     it('rejects with ExternalError when info returns 500', function () {
+      nock.removeInterceptor(this.transferNock.interceptors[0])
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
@@ -266,6 +276,7 @@ describe('Connection methods', function () {
     })
 
     it('handles overlapping connect() calls', function * () {
+      nock.removeInterceptor(this.transferNock.interceptors[0])
       const clock = sinon.useFakeTimers(START_DATE)
       const accountNock = nock('http://red.example')
         .get('/accounts/mike')
@@ -284,6 +295,7 @@ describe('Connection methods', function () {
     })
 
     it('fails if the response is invalid', function () {
+      nock.removeInterceptor(this.transferNock.interceptors[0])
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, { name: 'mike' })
@@ -310,136 +322,37 @@ describe('Connection methods', function () {
       infoNock.done()
     })
 
-    describe('Webfinger login', function () {
-      beforeEach(function () {
-        this.plugin = new PluginBells({
-          identifier: 'mike@red.example',
-          password: 'mike'
+    it('should subscribe to notifications using the websocket websocket url', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
         })
-
-        this.webfinger = {
-          subject: 'acct:mike@red.example',
-          links: [
-            {
-              rel: 'https://interledger.org/rel/ledgerAccount',
-              href: 'http://red.example/accounts/mike'
-            }, {
-              rel: 'https://interledger.org/rel/ilpAddress',
-              href: 'example.red.mike'
-            }
-          ]
-        }
+      let usedCorrectWsUrl = false
+      const wsRedLedger = wsHelper.makeServer('ws://somewhererandom.example/notifications/mike?token=abc')
+      wsRedLedger.on('connection', () => {
+        usedCorrectWsUrl = true
       })
 
-      it('creates a plugin using a webfinger ID', function * () {
-        nock('http://red.example')
-          .get('/auth_token')
-          .reply(200, {token: 'abc'})
-        const accountNock = nock('http://red.example')
-          .get('/accounts/mike')
-          .reply(200, {
-            ledger: 'http://red.example',
-            name: 'mike'
-          })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, _.merge(this.infoRedLedger, {
+          urls: {
+            websocket: 'ws://somewhererandom.example/notifications/mike'
+          }
+        }))
 
-        const infoNock = nock('http://red.example')
-          .get('/')
-          .reply(200, Object.assign(this.infoRedLedger, {ilp_prefix: 'example.red.'}))
+      yield this.plugin.connect()
 
-        const webfingerNock = nock('https://red.example')
-          .get('/.well-known/webfinger?resource=acct:mike@red.example')
-          .reply(200, this.webfinger)
+      assert.equal(usedCorrectWsUrl, true, 'did not use the ws url from the metadata')
 
-        yield this.plugin.connect()
-        assert.equal(this.plugin.credentials.username, 'mike')
-
-        accountNock.done()
-        infoNock.done()
-        webfingerNock.done()
-      })
-
-      it('won\'t construct a plugin with both identifier and other credentials', function () {
-        try {
-          const plugin = new PluginBells({
-            identifier: 'mike@red.example',
-            credentials: {}
-          })
-          assert(!plugin)
-        } catch (e) {
-          assert(true)
-        }
-      })
-
-      it('fails to connect a plugin with invalid webfinger subject', function () {
-        this.webfinger.subject = 'trash'
-
-        nock('https://red.example')
-          .get('/.well-known/webfinger?resource=acct:mike@red.example')
-          .reply(200, this.webfinger)
-
-        return assert.isRejected(this.plugin.connect(), /subject \(/)
-      })
-
-      it('fails to connect a plugin without webfinger links', function () {
-        this.webfinger.links = null
-
-        nock('https://red.example')
-          .get('/.well-known/webfinger?resource=acct:mike@red.example')
-          .reply(200, this.webfinger)
-
-        return assert.isRejected(this.plugin.connect(), /result body doesn't contain links \(/)
-      })
-
-      it('fails to connect a plugin without necessary fields', function () {
-        this.webfinger.links = []
-
-        nock('https://red.example')
-          .get('/.well-known/webfinger?resource=acct:mike@red.example')
-          .reply(200, this.webfinger)
-
-        return assert.isRejected(this.plugin.connect(), /failed to get essential fields/)
-      })
+      wsRedLedger.stop()
     })
-
-    describe('info', function () {
-      it('loads the info from the ledger metadata', function * () {
-        nock('http://red.example')
-          .get('/accounts/mike')
-          .reply(200, {
-            ledger: 'http://red.example',
-            name: 'mike'
-          })
-        nock('http://red.example')
-          .get('/auth_token')
-          .reply(200, {token: 'abc'})
-        nock('http://red.example')
-          .get('/')
-          .reply(200, this.infoRedLedger)
-        yield this.plugin.connect()
-        assert.deepEqual(this.plugin.getInfo(), {
-          prefix: 'example.red.',
-          connectors: ['example.red.mark'],
-          currencyCode: 'USD',
-          currencyScale: 2,
-          minBalance: '0'
-        })
-      })
-
-      it('throws an ExternalError when info returns 500', function () {
-        nock('http://red.example')
-          .get('/accounts/mike')
-          .reply(200, {
-            ledger: 'http://red.example',
-            name: 'mike'
-          })
-        nock('http://red.example')
-          .get('/')
-          .reply(500)
-        return assert.isRejected(this.plugin.connect(), ExternalError, /Unable to determine ledger metadata/)
-      })
-    })
-
-    it('should set urls from object in ledger metadata and strip unnecessary values', function * () {
+    it('should not overwrite the username if one is specified in the options', function * () {
       nock('http://red.example')
         .get('/auth_token')
         .reply(200, {token: 'abc'})
@@ -449,6 +362,35 @@ describe('Connection methods', function () {
           ledger: 'http://red.example',
           name: 'mike'
         })
+      const infoNock = nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      const plugin = new PluginBells({
+        prefix: 'foo.',
+        account: 'http://red.example/accounts/mike',
+        password: 'mike',
+        username: 'xavier'
+      })
+      yield plugin.connect()
+      assert.equal(plugin.credentials.username, 'xavier')
+      accountNock.done()
+      infoNock.done()
+    })
+
+    it('should set urls from object in ledger metadata and strip unnecessary values', function * () {
+      nock.removeInterceptor(this.transferNock.interceptors[0])
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+      const accountNock = nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://another.example')
+        .get('/endpoint/1')
+        .reply(403)
       const urls = {
         'health': 'http://random.example/health',
         'transfer': 'http://another.example/endpoint/:id',
@@ -478,6 +420,166 @@ describe('Connection methods', function () {
       ]), 'urls should be set from metadata')
       accountNock.done()
       infoNock.done()
+    })
+  })
+
+  describe('Webfinger login', function () {
+    beforeEach(function () {
+      this.plugin = new PluginBells({
+        identifier: 'mike@red.example',
+        password: 'mike'
+      })
+
+      this.webfinger = {
+        subject: 'acct:mike@red.example',
+        links: [
+          {
+            rel: 'https://interledger.org/rel/ledgerAccount',
+            href: 'http://red.example/accounts/mike'
+          }, {
+            rel: 'https://interledger.org/rel/ilpAddress',
+            href: 'example.red.mike'
+          }
+        ]
+      }
+    })
+
+    it('creates a plugin using a webfinger ID', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+      nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
+      const accountNock = nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+
+      const infoNock = nock('http://red.example')
+        .get('/')
+        .reply(200, Object.assign(this.infoRedLedger, {ilp_prefix: 'example.red.'}))
+
+      const webfingerNock = nock('https://red.example')
+        .get('/.well-known/webfinger?resource=acct:mike@red.example')
+        .reply(200, this.webfinger)
+
+      yield this.plugin.connect()
+      assert.equal(this.plugin.credentials.username, 'mike')
+
+      accountNock.done()
+      infoNock.done()
+      webfingerNock.done()
+    })
+
+    it('won\'t construct a plugin with both identifier and other credentials', function () {
+      try {
+        const plugin = new PluginBells({
+          identifier: 'mike@red.example',
+          credentials: {}
+        })
+        assert(!plugin)
+      } catch (e) {
+        assert(true)
+      }
+    })
+
+    it('fails to connect a plugin with invalid webfinger subject', function () {
+      this.webfinger.subject = 'trash'
+
+      nock('https://red.example')
+        .get('/.well-known/webfinger?resource=acct:mike@red.example')
+        .reply(200, this.webfinger)
+
+      return assert.isRejected(this.plugin.connect(), /subject \(/)
+    })
+
+    it('fails to connect a plugin without webfinger links', function () {
+      this.webfinger.links = null
+
+      nock('https://red.example')
+        .get('/.well-known/webfinger?resource=acct:mike@red.example')
+        .reply(200, this.webfinger)
+
+      return assert.isRejected(this.plugin.connect(), /result body doesn't contain links \(/)
+    })
+
+    it('fails to connect a plugin without necessary fields', function () {
+      this.webfinger.links = []
+
+      nock('https://red.example')
+        .get('/.well-known/webfinger?resource=acct:mike@red.example')
+        .reply(200, this.webfinger)
+
+      return assert.isRejected(this.plugin.connect(), /failed to get essential fields/)
+    })
+  })
+
+  describe('info', function () {
+    it('loads the info from the ledger metadata', function * () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
+      yield this.plugin.connect()
+      assert.deepEqual(this.plugin.getInfo(), {
+        prefix: 'example.red.',
+        connectors: ['example.red.mark'],
+        currencyCode: 'USD',
+        currencyScale: 2,
+        minBalance: '0'
+      })
+    })
+
+    it('throws an ExternalError when info returns 500', function () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(500)
+      return assert.isRejected(this.plugin.connect(), ExternalError, /Unable to determine ledger metadata/)
+    })
+  })
+
+  describe('should not connect', function () {
+    it('doesn\'t retry if account is nonexistant', function () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(404)
+
+      return assert.isRejected(this.plugin.connect(),
+      /Unable to connect to account/)
+    })
+
+    it('fails if the retries exceed the timeout', function () {
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .replyWithError('fail')
+      return assert.isRejected(this.plugin.connect({timeout: 110}),
+      /Unable to connect to account: timeout/)
+    })
+
+    it('fails when options.timeout is invalid', function () {
+      assert.throws(() => {
+        this.plugin.connect({timeout: 'test'})
+      }, 'Expected options.timeout to be a number, received: string')
     })
 
     it('should reject if the ledger metadata does not include a urls map', function * () {
@@ -677,6 +779,9 @@ describe('Connection methods', function () {
         .get('/auth_token')
         .reply(200, {})
       nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
+      nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
           ledger: 'http://red.example',
@@ -687,147 +792,120 @@ describe('Connection methods', function () {
         .reply(200, this.infoRedLedger)
       return assert.isRejected(this.plugin.connect(), Error, 'Unable to get auth token from ledger')
     })
+  })
 
-    it('should subscribe to notifications using the websocket websocket url', function * () {
-      nock('http://red.example')
-        .get('/auth_token')
-        .reply(200, {token: 'abc'})
+  describe('should request a new auth token when one expires', function () {
+    beforeEach(function * () {
       nock('http://red.example')
         .get('/accounts/mike')
         .reply(200, {
           ledger: 'http://red.example',
           name: 'mike'
         })
-      let usedCorrectWsUrl = false
-      const wsRedLedger = wsHelper.makeServer('ws://somewhererandom.example/notifications/mike?token=abc')
-      wsRedLedger.on('connection', () => {
-        usedCorrectWsUrl = true
-      })
-
       nock('http://red.example')
-        .get('/')
-        .reply(200, _.merge(this.infoRedLedger, {
-          urls: {
-            websocket: 'ws://somewhererandom.example/notifications/mike'
-          }
-        }))
-
-      yield this.plugin.connect()
-
-      assert.equal(usedCorrectWsUrl, true, 'did not use the ws url from the metadata')
-
-      wsRedLedger.stop()
-    })
-    it('should not overwrite the username if one is specified in the options', function * () {
-      nock('http://red.example')
-        .get('/auth_token')
-        .reply(200, {token: 'abc'})
-      const accountNock = nock('http://red.example')
         .get('/accounts/mike')
-        .reply(200, {
-          ledger: 'http://red.example',
-          name: 'mike'
-        })
-      const infoNock = nock('http://red.example')
+        .matchHeader('authorization', 'Bearer def')
+        .reply(200, {balance: '100.01'})
+      nock('http://red.example')
         .get('/')
         .reply(200, this.infoRedLedger)
-      const plugin = new PluginBells({
-        prefix: 'foo.',
-        account: 'http://red.example/accounts/mike',
-        password: 'mike',
-        username: 'xavier'
-      })
-      yield plugin.connect()
-      assert.equal(plugin.credentials.username, 'xavier')
-      accountNock.done()
-      infoNock.done()
+
+      this.transferNock = nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
     })
 
-    it('doesn\'t retry if account is nonexistant', function () {
+    it('with the default max-age', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+        .get('/auth_token')
+        .reply(200, {token: 'def'})
+      yield assert.isFulfilled(this.plugin.connect(), null)
+      const clock = sinon.useFakeTimers(Date.now())
+      clock.tick(7 * 24 * 60 * 60 * 1000)
+      yield assert.isFulfilled(this.plugin.getBalance())
+      clock.restore()
+    })
+
+    it('with a custom max-age', function * () {
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc', token_max_age: 10})
+        .get('/auth_token')
+        .reply(200, {token: 'def'})
+      yield assert.isFulfilled(this.plugin.connect(), null)
+      const clock = sinon.useFakeTimers(Date.now())
+      clock.tick(10)
+      yield assert.isFulfilled(this.plugin.getBalance())
+      clock.restore()
+    })
+  })
+
+  describe('websocket reconnection', function () {
+    beforeEach(function * () {
       nock('http://red.example')
         .get('/accounts/mike')
-        .reply(404)
-
-      return assert.isRejected(this.plugin.connect(),
-        /Unable to connect to account/)
-    })
-
-    it('fails if the retries exceed the timeout', function () {
-      nock('http://red.example')
-        .get('/accounts/mike')
-        .replyWithError('fail')
-      return assert.isRejected(this.plugin.connect({timeout: 110}),
-        /Unable to connect to account: timeout/)
-    })
-
-    it('fails when options.timeout is invalid', function () {
-      assert.throws(() => {
-        this.plugin.connect({timeout: 'test'})
-      }, 'Expected options.timeout to be a number, received: string')
-    })
-
-    describe('websocket reconnection', function () {
-      beforeEach(function * () {
-        nock('http://red.example')
-          .get('/accounts/mike')
-          .reply(200, {
-            ledger: 'http://red.example',
-            name: 'mike'
-          })
-        nock('http://red.example')
-          .get('/')
-          .reply(200, this.infoRedLedger)
-        nock('http://red.example')
-          .get('/auth_token')
-          .reply(200, {token: 'abc'})
-      })
-
-      it('reconnects if the socket is closed', function * () {
-        assert.equal(this.plugin.isConnected(), false)
-        yield this.plugin.connect()
-        assert.equal(this.plugin.isConnected(), true)
-        this.wsRedLedger.emit('close')
-        assert.equal(this.plugin.isConnected(), false)
-        yield new Promise((resolve, reject) => {
-          // Wait for the plugin to reconnect.
-          setTimeout(() => {
-            assert.equal(this.plugin.isConnected(), true)
-            resolve()
-          }, 20)
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
         })
-      })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+      nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
+    })
 
-      it('should reconnect if the websocket connection gets an error', function * () {
-        yield this.plugin.connect()
-        const spyConnection = sinon.spy()
-        this.wsRedLedger.on('connection', spyConnection)
-        this.wsRedLedger.emit('error', 'blah')
-        yield new Promise((resolve) => setTimeout(resolve, 20))
-        assert.equal(spyConnection.callCount, 1)
+    it('reconnects if the socket is closed', function * () {
+      assert.equal(this.plugin.isConnected(), false)
+      yield this.plugin.connect()
+      assert.equal(this.plugin.isConnected(), true)
+      this.wsRedLedger.emit('close')
+      assert.equal(this.plugin.isConnected(), false)
+      yield new Promise((resolve, reject) => {
+        // Wait for the plugin to reconnect.
+        setTimeout(() => {
+          assert.equal(this.plugin.isConnected(), true)
+          resolve()
+        }, 30)
       })
+    })
 
-      it('should reconnect if the websocket connection keeps closing', function * () {
-        yield this.plugin.connect()
-        const realImmediate = setImmediate
-        const clock = sinon.useFakeTimers()
-        const spyConnection = sinon.spy()
-        const spyDisconnect = sinon.spy()
-        const spyConnect = sinon.spy()
-        this.wsRedLedger.on('connection', spyConnection)
-        this.plugin.on('disconnect', spyDisconnect)
-        this.plugin.on('connect', spyConnect)
-        for (let i = 1; i < 10; i++) {
-          this.wsRedLedger.emit('close')
-          // it actually uses a fibonacci backoff
-          // but it won't be more than 500ms
-          clock.tick(500)
-          yield new Promise((resolve) => realImmediate(resolve))
-          assert.equal(spyConnection.callCount, i, 'server did not get the right number of connections')
-          assert.equal(spyDisconnect.callCount, i, 'plugin did not emit disconnect when it was supposed to')
-          assert.equal(spyConnect.callCount, i, 'plugin did not emit connect when it was supposed to')
-        }
-        clock.restore()
-      })
+    it('should reconnect if the websocket connection gets an error', function * () {
+      yield this.plugin.connect()
+      const spyConnection = sinon.spy()
+      this.wsRedLedger.on('connection', spyConnection)
+      this.wsRedLedger.emit('error', 'blah')
+      yield new Promise((resolve) => setTimeout(resolve, 20))
+      assert.equal(spyConnection.callCount, 1)
+    })
+
+    it('should reconnect if the websocket connection keeps closing', function * () {
+      yield this.plugin.connect()
+      const realImmediate = setImmediate
+      const clock = sinon.useFakeTimers()
+      const spyConnection = sinon.spy()
+      const spyDisconnect = sinon.spy()
+      const spyConnect = sinon.spy()
+      this.wsRedLedger.on('connection', spyConnection)
+      this.plugin.on('disconnect', spyDisconnect)
+      this.plugin.on('connect', spyConnect)
+      for (let i = 1; i < 10; i++) {
+        this.wsRedLedger.emit('close')
+        // it actually uses a fibonacci backoff
+        // but it won't be more than 500ms
+        clock.tick(500)
+        yield new Promise((resolve) => realImmediate(resolve))
+        assert.equal(spyConnection.callCount, i, 'server did not get the right number of connections')
+        assert.equal(spyDisconnect.callCount, i, 'plugin did not emit disconnect when it was supposed to')
+        assert.equal(spyConnect.callCount, i, 'plugin did not emit connect when it was supposed to')
+      }
+      clock.restore()
     })
   })
 
@@ -847,7 +925,9 @@ describe('Connection methods', function () {
           ledger: 'http://red.example',
           name: 'mike'
         })
-
+      nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
       nock('http://red.example')
         .get('/')
         .reply(200, this.infoRedLedger)

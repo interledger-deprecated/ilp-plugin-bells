@@ -38,6 +38,10 @@ describe('PluginBellsFactory', function () {
         .get('/auth_token')
         .reply(200, {token: 'abc'})
 
+      nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
+
       this.transfer = {
         current: {
           id: 'ac518dfb-b8a6-49ef-b78d-5e26e81d7a45',
@@ -125,6 +129,7 @@ describe('PluginBellsFactory', function () {
       it('will not create a nonexistant account', function * () {
         const nockBob = nock('http://red.example')
           .get('/accounts/bob')
+          .matchHeader('authorization', 'Bearer abc')
           .reply(404, {})
 
         try {
@@ -139,10 +144,7 @@ describe('PluginBellsFactory', function () {
       it('will create a plugin', function * () {
         nock('http://red.example')
           .get('/accounts/mike')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'admin'
@@ -156,10 +158,7 @@ describe('PluginBellsFactory', function () {
       it('will not create more than one plugin per account', function * () {
         nock('http://red.example')
           .get('/accounts/mike')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'admin'
@@ -173,10 +172,7 @@ describe('PluginBellsFactory', function () {
       it('will create a plugin with account', function * () {
         nock('http://red.example')
           .get('/accounts/mike')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'admin'
@@ -192,6 +188,7 @@ describe('PluginBellsFactory', function () {
         const username = 'mike_12-34'
         nock('http://red.example')
           .get('/accounts/' + username)
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200)
 
         const plugin = yield this.factory.create({ account: 'http://red.example/accounts/' + username })
@@ -213,10 +210,7 @@ describe('PluginBellsFactory', function () {
       it('subscribes to the new account', function * () {
         nock('http://red.example')
           .get('/accounts/mary')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'admin'
@@ -241,10 +235,7 @@ describe('PluginBellsFactory', function () {
       it('resolves when it has gotten the subscription response', function * () {
         nock('http://red.example')
           .get('/accounts/mary')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'mary'
@@ -279,8 +270,6 @@ describe('PluginBellsFactory', function () {
       })
 
       it('works for ledgers that contain a port in the URL', function * () {
-        nock.cleanAll()
-
         this.wsRedLedger = wsHelper.makeServer('ws://red.example:3000/websocket?token=abc')
         this.infoRedLedger = JSON.parse(JSON.stringify(this.infoRedLedger).replace(/red\.example/g, 'red.example:3000'))
 
@@ -290,11 +279,14 @@ describe('PluginBellsFactory', function () {
             ledger: 'http://red.example:3000',
             name: 'admin'
           })
+          .get('/transfers/1')
+          .reply(403)
           .get('/')
           .reply(200, this.infoRedLedger)
           .get('/auth_token')
           .reply(200, {token: 'abc'})
           .get('/accounts/bob')
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example:3000',
             name: 'bob'
@@ -317,10 +309,7 @@ describe('PluginBellsFactory', function () {
       beforeEach(function * () {
         nock('http://red.example')
           .get('/accounts/mike')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'admin'
@@ -437,7 +426,7 @@ describe('PluginBellsFactory', function () {
             ledger: 'http://red.example',
             custom: { foo: 'bar' }
           })
-          .basicAuth({user: 'admin', pass: 'admin'})
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200)
 
         setTimeout(() => {
@@ -457,7 +446,7 @@ describe('PluginBellsFactory', function () {
         it(`sends a ${format}-format transfer with the correct fields`, function * () {
           nock('http://red.example')
             .put('/transfers/' + this.transfer[format].id, this.fiveBellsTransferAlice)
-            .basicAuth({user: 'admin', pass: 'admin'})
+            .matchHeader('authorization', 'Bearer abc')
             .reply(200)
 
           yield this.plugin.sendTransfer(this.transfer[format])
@@ -498,19 +487,13 @@ describe('PluginBellsFactory', function () {
 
         nock('http://red.example')
           .get('/accounts/mary')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'mary'
           })
           .get('/accounts/bob')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'bob'
@@ -533,10 +516,7 @@ describe('PluginBellsFactory', function () {
       beforeEach(function * () {
         nock('http://red.example')
           .get('/accounts/mike')
-          .basicAuth({
-            user: 'admin',
-            pass: 'admin'
-          })
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'admin'
@@ -577,6 +557,10 @@ describe('PluginBellsFactory', function () {
           ledger: 'http://red.example',
           name: 'admin'
         })
+
+      nock('http://red.example')
+        .get('/transfers/1')
+        .reply(403)
 
       const infoRedLedger = cloneDeep(require('./data/infoRedLedger.json'))
 
@@ -688,6 +672,7 @@ describe('PluginBellsFactory', function () {
       beforeEach(function * () {
         nock('http://red.example')
           .get('/accounts/mike')
+          .matchHeader('authorization', 'Bearer abc')
           .reply(200, {
             ledger: 'http://red.example',
             name: 'admin'
