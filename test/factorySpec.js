@@ -121,6 +121,16 @@ describe('PluginBellsFactory', function () {
       })
     })
 
+    describe('getAccountAs', function () {
+      beforeEach(function * () {
+        yield this.factory.connect()
+      })
+
+      it('should return the correct account for the given username', function () {
+        assert.equal(this.factory.getAccountAs('bob'), 'example.red.bob')
+      })
+    })
+
     describe('create', function () {
       beforeEach(function * () {
         yield this.factory.connect()
