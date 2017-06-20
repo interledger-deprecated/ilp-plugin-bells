@@ -123,6 +123,23 @@ class PluginFactory extends EventEmitter2 {
     return this.adminPlugin.disconnect()
   }
 
+  // these doThingAs functions allow you to act as another user without
+  // instantiating a plugin for them. It can be used alongside the global
+  // subscription to listen on all accounts simultaneously without creating a
+  // new listener for each account.
+
+  fulfillConditionAs (user, transferId, fulfillment) {
+    return this.adminPlugin.fulfillCondition(transferId, fulfillment)
+  }
+
+  rejectIncomingTransferAs (user, transferId, reason) {
+    return this.adminPlugin.rejectIncomingTransfer(transferId, reason)
+  }
+
+  getAccountAs (user) {
+    return this.adminPlugin.getInfo().prefix + user
+  }
+
   /*
   * @param {object} opts plugin options
   * @param {string} opts.username username to create a plugin for
