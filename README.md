@@ -9,25 +9,13 @@
 
 > ILP ledger plugin for [five-bells-ledger](https://github.com/interledgerjs/five-bells-ledger)
 
-## Installation
-
-``` sh
-npm install --save ilp ilp-plugin-bells
-```
-
 ## Usage
 
-``` js
-const Client = require('ilp-core').Client
-
-const client = new Client({
-  _plugin: require('ilp-plugin-bells'),
-
-  // a webfinger identifier can be used to resolve account information
-  identifier: 'alice@red.ilpdemo.org',
-  password: 'alice'
-})
-```
+This plugin adheres to the
+[Ledger Plugin Interface (LPI)](https://interledger.org/rfcs/0004-ledger-plugin-interface/),
+which means it can be used in combination with other components, like the
+[ilp module](https://github.com/interledgerjs/ilp#simple-payment-setup-protocol-spsp)
+and the [ilp-connector](https://github.com/interledgerjs/ilp-connector#trading).
 
 ILP-Plugin-Bells can also be created via a factory, which allows many instances
 to share a single websocket connection.
@@ -36,7 +24,6 @@ to share a single websocket connection.
 listen for events on all accounts.**
 
 ```js
-const Client = require('ilp-core').Client
 const PluginBellsFactory = require('ilp-plugin-bells').Factory
 
 // connects to the admin account and uses one websocket connection to subscribe
@@ -57,8 +44,6 @@ factory.connect().then(() => {
   // { account: 'https://red.ilpdemo.org/ledger/accounts/alice' } is also valid
 
 }).then((plugin) => {
-
-  const client = new Client(plugin)
 
   // this call is uneccesary and will do nothing, because the plugin is already
   // connected
