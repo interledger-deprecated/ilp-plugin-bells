@@ -808,9 +808,8 @@ class FiveBellsLedger extends EventEmitter2 {
   }
 
   _requestRetry (requestOptions, retryOptions) {
-    return requestRetry(Object.assign({
-      credentials: this.credentials
-    }, requestOptions), retryOptions)
+    return requestRetry(Object.assign({}, requestCredentials(this.credentials), requestOptions),
+      retryOptions)
   }
 
   * _requestWithCredentials (options) {
