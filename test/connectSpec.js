@@ -90,6 +90,33 @@ describe('Connection methods', function () {
       clock.restore()
     })
 
+    it('pings the ledger every 30 seconds', function * () {
+      const clock = sinon.useFakeTimers('setInterval')
+
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      const pinged = new Promise((resolve, reject) => {
+        this.wsRedLedger.on('ping', resolve)
+      })
+
+      yield assert.isFulfilled(this.plugin.connect(), null, 'should be fulfilled with null')
+      assert.isTrue(this.plugin.isConnected())
+      clock.tick(30001)
+      yield pinged
+      clock.restore()
+    })
+
     it('retries querying the account forever if the timeout is Infinity, even if gets a 4xx error', function * () {
       const clock = sinon.useFakeTimers('setTimeout')
       // run the clock extra fast

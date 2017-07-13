@@ -14,6 +14,10 @@ class MockWebSocket extends EventEmitter {
     this.sock.onerror = this.handleError.bind(this)
   }
 
+  ping () {
+    this.sock.send('ping')
+  }
+
   close () {
     this.emit('close')
   }
@@ -34,6 +38,11 @@ class MockWebSocket extends EventEmitter {
 
   handleMessage (evt) {
     process.nextTick(() => {
+      if (evt.data === 'pong') {
+        this.emit('pong')
+        return
+      }
+
       this.emit('message', evt.data, {})
     })
   }
@@ -53,6 +62,12 @@ exports.makeServer = function (uri) {
     }))
   })
   server.on('message', (rpcMessageString) => {
+    if (rpcMessageString === 'ping') {
+      server.dispatchEvent({ type: 'ping' })
+      server.send('pong')
+      return
+    }
+
     const rpcMessage = JSON.parse(rpcMessageString)
     if (rpcMessage.method === 'subscribe_account') {
       server.send(JSON.stringify({

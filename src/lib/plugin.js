@@ -951,7 +951,11 @@ function setupPing (ws) {
   }
 
   function ping () {
-    if (!isAlive) clear()
+    if (!isAlive) {
+      debug('no ping response in', wsPingInterval, 'ms')
+      clear()
+      return
+    }
     isAlive = false
 
     try {
