@@ -24,6 +24,7 @@ const accountBackoffMax = 30000
 const defaultConnectTimeout = 60000
 const wsReconnectDelayMin = 10
 const wsReconnectDelayMax = 500
+const wsPingInterval = 30000
 const defaultMessageTimeout = 5000
 const defaultAuthTokenMaxAge = 7 * 24 * 60 * 60 * 1000 // one week
 
@@ -235,6 +236,8 @@ class FiveBellsLedger extends EventEmitter2 {
       // and wait for a "connect" RPC message on it.
       new Promise((resolve, reject) => {
         this.connection = reconnect(reconnectOptions, (ws) => {
+          setupPing(ws)
+
           ws.on('open', () => {
             debug('ws opened: ' + wsUri)
           })
@@ -932,6 +935,36 @@ function * requestRetry (requestOptions, retryOptions) {
   }
   debug('http request failed. aborting. (uri: ' + requestOptions.uri + ')')
   throw new Error(retryOptions.errorMessage)
+}
+
+function setupPing (ws) {
+  let isAlive = true
+  let pingInterval
+
+  function clear () {
+    clearInterval(pingInterval)
+    ws.removeListener('pong', heartbeat)
+  }
+
+  function heartbeat () {
+    isAlive = true
+  }
+
+  function ping () {
+    if (!isAlive) clear()
+    isAlive = false
+
+    try {
+      ws.ping('', false, true)
+    } catch (e) {
+      debug('error during ping:', e)
+      clear()
+    }
+  }
+
+  ws.on('pong', heartbeat)
+  pingInterval = setInterval(ping, wsPingInterval)
+  debug('pinging ledger every', wsPingInterval, 'ms')
 }
 
 module.exports = FiveBellsLedger
