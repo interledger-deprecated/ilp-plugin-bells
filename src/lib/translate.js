@@ -277,11 +277,7 @@ const translateTransferNotification = (
   }
 }
 
-const translateMessageNotification = (_message, account, ledgerContext) => {
-  const message = Object.assign({}, _message)
-
-  // remove any null value for message data
-  if (!message.data) delete message.data
+const translateMessageNotification = (message, account, ledgerContext) => {
   validateMessage(message, ledgerContext)
 
   return [
@@ -290,10 +286,10 @@ const translateMessageNotification = (_message, account, ledgerContext) => {
       ledger: ledgerContext.prefix,
       from: ledgerContext.prefix + ledgerContext.accountUriToName(message.from),
       to: ledgerContext.prefix + ledgerContext.accountUriToName(message.to),
-      ilp: message.ilp || (message.data && message.data.ilp),
-      custom: message.custom || (message.data && message.data.custom)
+      ilp: message.data && message.data.ilp,
+      custom: message.data && message.data.custom
     },
-    message.id || (message.data && message.data.id)
+    message.data && message.data.id
   ]
 }
 

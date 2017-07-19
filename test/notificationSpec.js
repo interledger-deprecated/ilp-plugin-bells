@@ -579,10 +579,10 @@ describe('Notification handling', function () {
         .post('/messages', this.fiveBellsMessage)
         .matchHeader('authorization', 'Bearer abc')
         .reply(200)
-      const requestMessage = Object.assign({id: this.fiveBellsMessage.id}, this.message)
+      const requestMessage = Object.assign({id: this.fiveBellsMessage.data.id}, this.message)
       const responseMessage = Object.assign({}, this.message, {custom: {response: true}})
       setTimeout(() => {
-        this.plugin.emit('incoming_message', responseMessage, this.fiveBellsMessage.id)
+        this.plugin.emit('incoming_message', responseMessage, this.fiveBellsMessage.data.id)
       }, 10)
 
       yield assert.eventually.deepEqual(this.plugin.sendRequest(requestMessage), responseMessage)
