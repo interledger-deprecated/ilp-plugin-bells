@@ -434,7 +434,7 @@ describe('PluginBellsFactory', function () {
             from: 'http://red.example/accounts/mike',
             to: 'http://red.example/accounts/alice',
             ledger: 'http://red.example',
-            custom: { foo: 'bar' }
+            data: { custom: { foo: 'bar' } }
           })
           .matchHeader('authorization', 'Bearer abc')
           .reply(200)

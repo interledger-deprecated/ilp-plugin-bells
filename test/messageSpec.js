@@ -284,8 +284,8 @@ describe('Messaging', function () {
           assert.equal(message.ledger, this.ledgerMessage.ledger)
           assert.equal(message.from, this.ledgerMessage.from)
           assert.equal(message.to, this.ledgerMessage.to)
-          assert.equal(message.id, this.ledgerMessage.id)
-          assert.deepEqual(IlpPacket.deserializeIlpError(Buffer.from(message.ilp, 'base64')), {
+          assert.equal(message.data.id, this.ledgerMessage.data.id)
+          assert.deepEqual(IlpPacket.deserializeIlpError(Buffer.from(message.data.ilp, 'base64')), {
             code: 'F00',
             name: 'Bad Request',
             triggeredBy: 'example.red.mike',
@@ -308,7 +308,7 @@ describe('Messaging', function () {
     it('relays an error message to the ledger if no response is returned', function * () {
       nock('http://red.example')
         .post('/messages', (message) => {
-          assert.deepEqual(IlpPacket.deserializeIlpError(Buffer.from(message.ilp, 'base64')), {
+          assert.deepEqual(IlpPacket.deserializeIlpError(Buffer.from(message.data.ilp, 'base64')), {
             code: 'F00',
             name: 'Bad Request',
             triggeredBy: 'example.red.mike',

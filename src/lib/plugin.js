@@ -520,12 +520,14 @@ class FiveBellsLedger extends EventEmitter2 {
 
     const destinationAddress = this.ledgerContext.parseAddress(message.to)
     const fiveBellsMessage = {
-      id: message.id,
       ledger: this.ledgerContext.host,
       from: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(this.username)),
       to: this.ledgerContext.urls.account.replace(':name', encodeURIComponent(destinationAddress.username)),
-      ilp: message.ilp,
-      custom: message.custom
+      data: {
+        id: message.id,
+        ilp: message.ilp,
+        custom: message.custom
+      }
     }
     debug('converted to ledger message: ' + JSON.stringify(fiveBellsMessage))
 
