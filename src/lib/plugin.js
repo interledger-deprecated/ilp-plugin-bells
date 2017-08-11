@@ -236,7 +236,7 @@ class FiveBellsLedger extends EventEmitter2 {
       // and wait for a "connect" RPC message on it.
       new Promise((resolve, reject) => {
         this.connection = reconnect(reconnectOptions, (ws) => {
-          setupPing(ws)
+          this._setupPing(ws)
 
           ws.on('open', () => {
             debug('ws opened: ' + wsUri)
@@ -842,6 +842,41 @@ class FiveBellsLedger extends EventEmitter2 {
       return 'basic'
     }
   }
+
+  _setupPing (ws) {
+    let isAlive = true
+    let pingInterval
+
+    function clear () {
+      clearInterval(pingInterval)
+      ws.removeListener('pong', heartbeat)
+    }
+
+    function heartbeat () {
+      isAlive = true
+    }
+
+    function ping () {
+      if (!isAlive) {
+        debug('no ping response in', wsPingInterval, 'ms')
+        clear()
+        return
+      }
+      isAlive = false
+
+      try {
+        ws.ping('', false, true)
+      } catch (e) {
+        debug('error during ping:', e)
+        clear()
+      }
+    }
+
+    this.once('disconnect', () => { clear() })
+    ws.on('pong', heartbeat)
+    pingInterval = setInterval(ping, wsPingInterval)
+    debug('pinging ledger every', wsPingInterval, 'ms')
+  }
 }
 
 function requestCredentials (credentials, token) {
@@ -936,40 +971,6 @@ function * requestRetry (requestOptions, retryOptions) {
   }
   debug('http request failed. aborting. (uri: ' + requestOptions.uri + ')')
   throw new Error(retryOptions.errorMessage)
-}
-
-function setupPing (ws) {
-  let isAlive = true
-  let pingInterval
-
-  function clear () {
-    clearInterval(pingInterval)
-    ws.removeListener('pong', heartbeat)
-  }
-
-  function heartbeat () {
-    isAlive = true
-  }
-
-  function ping () {
-    if (!isAlive) {
-      debug('no ping response in', wsPingInterval, 'ms')
-      clear()
-      return
-    }
-    isAlive = false
-
-    try {
-      ws.ping('', false, true)
-    } catch (e) {
-      debug('error during ping:', e)
-      clear()
-    }
-  }
-
-  ws.on('pong', heartbeat)
-  pingInterval = setInterval(ping, wsPingInterval)
-  debug('pinging ledger every', wsPingInterval, 'ms')
 }
 
 module.exports = FiveBellsLedger
