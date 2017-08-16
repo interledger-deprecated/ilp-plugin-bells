@@ -117,6 +117,37 @@ describe('Connection methods', function () {
       clock.restore()
     })
 
+    it('stops pinging after disconnect', function * () {
+      const clock = sinon.useFakeTimers('setInterval', 'clearInterval')
+
+      nock('http://red.example')
+        .get('/accounts/mike')
+        .reply(200, {
+          ledger: 'http://red.example',
+          name: 'mike'
+        })
+      nock('http://red.example')
+        .get('/')
+        .reply(200, this.infoRedLedger)
+      nock('http://red.example')
+        .get('/auth_token')
+        .reply(200, {token: 'abc'})
+
+      let pinged = false
+      this.wsRedLedger.on('ping', () => {
+        pinged = true
+      })
+
+      yield assert.isFulfilled(this.plugin.connect(), null, 'should be fulfilled with null')
+      assert.isTrue(this.plugin.isConnected())
+      yield assert.isFulfilled(this.plugin.disconnect(), null, 'should be fulfilled with null')
+      assert.isFalse(this.plugin.isConnected())
+
+      clock.tick(30001)
+      assert.isFalse(pinged, 'Expected the plugin not to ping the ledger, but it did.')
+      clock.restore()
+    })
+
     it('retries querying the account forever if the timeout is Infinity, even if gets a 4xx error', function * () {
       const clock = sinon.useFakeTimers('setTimeout')
       // run the clock extra fast
