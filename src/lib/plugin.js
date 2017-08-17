@@ -225,7 +225,7 @@ class FiveBellsLedger extends EventEmitter2 {
 
     // reject if the timeout occurs before the websocket is successfully established
     return Promise.race([
-      wait(timeout).then(() => {
+      wait(timeout, true).then(() => {
         throw new Error('websocket connection to ' +
           wsUri +
             ' timed out before "connect" RPC message was received (' +
@@ -872,7 +872,7 @@ class FiveBellsLedger extends EventEmitter2 {
       }
     }
 
-    this.once('disconnect', () => { clear() })
+    this.once('disconnect', clear)
     ws.on('pong', heartbeat)
     pingInterval = setInterval(ping, wsPingInterval)
     debug('pinging ledger every', wsPingInterval, 'ms')
@@ -901,13 +901,14 @@ function getResponseJSON (res) {
   return JSON.parse(res.body)
 }
 
-function wait (ms) {
+function wait (ms, unref) {
   if (ms === Infinity) {
     return new Promise((resolve) => {})
   }
 
   return new Promise((resolve) => {
-    setTimeout(resolve, ms)
+    const timeout = setTimeout(resolve, ms)
+    if (unref) timeout.unref()
   })
 }
 
