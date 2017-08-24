@@ -28,6 +28,20 @@ class NotAcceptedError extends Error {
   }
 }
 
+class InsufficientBalanceError extends Error {
+  constructor (message) {
+    super(message)
+    this.name = 'InsufficientBalanceError'
+  }
+}
+
+class AccountNotFoundError extends Error {
+  constructor (message) {
+    super(message)
+    this.name = 'AccountNotFoundError'
+  }
+}
+
 class AlreadyRolledBackError extends Error {
   constructor (message) {
     super(message)
@@ -78,6 +92,8 @@ module.exports = {
   MissingFulfillmentError,
   NoSubscriptionsError,
   NotAcceptedError,
+  InsufficientBalanceError,
+  AccountNotFoundError,
   RequestHandlerAlreadyRegisteredError,
   TransferNotConditionalError,
   TransferNotFoundError

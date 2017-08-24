@@ -59,6 +59,7 @@ describe('Connection methods', function () {
         .reply(200, this.infoRedLedger)
       nock('http://red.example')
         .get('/auth_token')
+        .basicAuth({user: 'mike', pass: 'mike'})
         .reply(200, {token: 'abc'})
 
       yield assert.isFulfilled(this.plugin.connect(), null, 'should be fulfilled with null')
