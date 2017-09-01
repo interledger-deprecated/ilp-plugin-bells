@@ -245,6 +245,56 @@ describe('Transfer methods', function () {
       }).should.be.rejectedWith(errors.NotAcceptedError, 'fail').notify(done)
     })
 
+    it('throws an InsufficientBalanceError on InsufficientFundsError', function (done) {
+      nock('http://red.example')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', {
+          id: 'http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          ledger: 'http://red.example',
+          debits: [{
+            account: 'http://red.example/accounts/mike',
+            amount: '123',
+            authorized: true
+          }],
+          credits: [{
+            account: 'http://red.example/accounts/alice',
+            amount: '123'
+          }]
+        })
+        .matchHeader('authorization', 'Bearer abc')
+        .reply(400, {id: 'InsufficientFundsError', message: 'fail'})
+
+      this.plugin.sendTransfer({
+        id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+        account: 'example.red.alice',
+        amount: '12300'
+      }).should.be.rejectedWith(errors.InsufficientBalanceError, 'fail').notify(done)
+    })
+
+    it('throws an AccountNotFoundError on UnprocessableEntityError', function (done) {
+      nock('http://red.example')
+        .put('/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c', {
+          id: 'http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+          ledger: 'http://red.example',
+          debits: [{
+            account: 'http://red.example/accounts/mike',
+            amount: '123',
+            authorized: true
+          }],
+          credits: [{
+            account: 'http://red.example/accounts/alice',
+            amount: '123'
+          }]
+        })
+        .matchHeader('authorization', 'Bearer abc')
+        .reply(400, {id: 'UnprocessableEntityError', message: 'Account foo does not exist'})
+
+      this.plugin.sendTransfer({
+        id: '6851929f-5a91-4d02-b9f4-4ae6b7f1768c',
+        account: 'example.red.alice',
+        amount: '12300'
+      }).should.be.rejectedWith(errors.AccountNotFoundError, 'Account foo does not exist').notify(done)
+    })
+
     it('sets up case notifications when "cases" is provided', function * () {
       nock('http://notary.example/cases/2cd5bcdb-46c9-4243-ac3f-79046a87a086')
         .post('/targets', ['http://red.example/transfers/6851929f-5a91-4d02-b9f4-4ae6b7f1768c/fulfillment'])

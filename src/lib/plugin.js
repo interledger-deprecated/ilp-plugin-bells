@@ -613,6 +613,10 @@ class FiveBellsLedger extends EventEmitter2 {
       debug('error submitting transfer:', sendRes.statusCode, JSON.stringify(body))
       if (body.id === 'InvalidBodyError') throw new errors.InvalidFieldsError(body.message)
       if (body.id === 'InvalidModificationError') throw new errors.DuplicateIdError(body.message)
+      if (body.id === 'InsufficientFundsError') throw new errors.InsufficientBalanceError(body.message)
+      if (body.id === 'UnprocessableEntityError' && /Account .* does not exist/.test(body.message)) {
+        throw new errors.AccountNotFoundError(body.message)
+      }
       throw new errors.NotAcceptedError(body.message)
     }
 
